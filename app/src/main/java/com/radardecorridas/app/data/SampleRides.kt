@@ -1,0 +1,104 @@
+package com.radardecorridas.app.data
+
+import com.radardecorridas.app.model.RideData
+
+object SampleRides {
+    val list = listOf(
+        RideData(
+            id = "uber-good-1",
+            app = "uber",
+            category = "UberX",
+            price = 36.80,
+            totalDistanceKm = 12.2,
+            pickupDistanceKm = 1.8,
+            tripDistanceKm = 10.4,
+            totalDurationMin = 23,
+            pickupDurationMin = 5,
+            tripDurationMin = 18,
+            pickupAddress = "Av. Paulista, 1578 - Bela Vista",
+            destinationAddress = "Aeroporto de Congonhas - Terminal",
+            passengerRating = 4.94,
+            timestamp = "Há 5 segundos"
+        ),
+        RideData(
+            id = "99-partial-1",
+            app = "99",
+            category = "99Pop",
+            price = 18.50,
+            totalDistanceKm = 10.5,
+            pickupDistanceKm = 2.5,
+            tripDistanceKm = 8.0,
+            totalDurationMin = 18,
+            pickupDurationMin = 4,
+            tripDurationMin = 14,
+            pickupAddress = "Rua Augusta, 900 - Consolação",
+            destinationAddress = "Av. Rebouças, 2200 - Pinheiros",
+            passengerRating = 4.88,
+            timestamp = "Há 12 segundos"
+        ),
+        RideData(
+            id = "uber-bad-1",
+            app = "uber",
+            category = "UberX",
+            price = 19.20,
+            totalDistanceKm = 15.8,
+            pickupDistanceKm = 4.2,
+            tripDistanceKm = 11.6,
+            totalDurationMin = 46,
+            pickupDurationMin = 11,
+            tripDurationMin = 35,
+            pickupAddress = "Rua Domingos de Morais, 1200 - Vila Mariana",
+            destinationAddress = "Av. Cupecê, 3100 - Cidade Ademar",
+            passengerRating = 4.71,
+            timestamp = "Há 2 segundos"
+        ),
+        RideData(
+            id = "99-vip-1",
+            app = "99",
+            category = "99Plus",
+            price = 52.40,
+            totalDistanceKm = 16.0,
+            pickupDistanceKm = 2.0,
+            tripDistanceKm = 14.0,
+            totalDurationMin = 32,
+            pickupDurationMin = 6,
+            tripDurationMin = 26,
+            pickupAddress = "Shopping JK Iguatemi - Itaim Bibi",
+            destinationAddress = "Alphaville Industrial - Barueri",
+            passengerRating = 4.98,
+            timestamp = "Há 8 segundos"
+        ),
+        RideData(
+            id = "uber-traffic-yellow",
+            app = "uber",
+            category = "Uber Comfort",
+            price = 24.00,
+            totalDistanceKm = 7.2,
+            pickupDistanceKm = 1.2,
+            tripDistanceKm = 6.0,
+            totalDurationMin = 42,
+            pickupDurationMin = 7,
+            tripDurationMin = 35,
+            pickupAddress = "Av. Brigadeiro Faria Lima, 3477",
+            destinationAddress = "Rua Teodoro Sampaio, 1800 - Pinheiros",
+            passengerRating = 4.92,
+            timestamp = "Há 15 segundos"
+        ),
+        RideData(
+            id = "indrive-bad-2",
+            app = "indrive",
+            category = "inDrive Viagem",
+            price = 14.00,
+            totalDistanceKm = 12.0,
+            pickupDistanceKm = 3.0,
+            tripDistanceKm = 9.0,
+            totalDurationMin = 38,
+            pickupDurationMin = 8,
+            tripDurationMin = 30,
+            pickupAddress = "Terminal Rodoviário Tietê",
+            destinationAddress = "Bairro do Limão",
+            passengerRating = 4.65,
+            timestamp = "Há 1 segundo"
+        )
+    )
+}

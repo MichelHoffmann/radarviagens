@@ -1,0 +1,8 @@
+{
+  "name": "Radar de Corridas - Calculadora Flutuante Uber e 99",
+  "description": "Aplicativo para motoristas de app que analisa chamadas da Uber e 99 em tempo real, calculando R$/km e R$/hora com pop-up flutuante verde, amarelo e vermelho.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

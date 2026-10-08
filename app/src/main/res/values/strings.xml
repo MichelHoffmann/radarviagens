@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Radar de Corridas</string>
+    <string name="accessibility_service_description">Permite ao Radar de Corridas ler os valores de chamadas recebidas na Uber e 99 em tempo real para calcular R$/km e R$/hora.</string>
+</resources>
