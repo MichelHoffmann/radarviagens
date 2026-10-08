@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/accessibility_service_description"
-    android:packageNames="com.ubercab.driver,com.taxis99.driver,com.didiglobal.driver,com.taxis99,com.didichuxing.driver,sinet.startup.inDriver"
+    android:packageNames="com.ubercab.driver,com.ubercab,com.taxis99.driver,com.taxis99,com.didiglobal.driver,com.didichuxing.driver,com.didichuxing.passenger,sinet.startup.inDriver"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
     android:accessibilityFlags="flagDefault|flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
     android:accessibilityFeedbackType="feedbackGeneric"

@@ -32,9 +32,7 @@ import com.radardecorridas.app.ui.theme.*
 import com.radardecorridas.app.util.RideCalculator
 
 enum class AppTab(val title: String, val icon: ImageVector) {
-    SIMULATOR("Simulador", Icons.Default.PhoneAndroid),
-    SETTINGS("Ajustes", Icons.Default.Tune),
-    SCANNER("Scanner", Icons.Default.CropFree),
+    HOME("Início", Icons.Default.Home),
     HISTORY("Histórico", Icons.Default.History),
     SYSTEM("Sistema", Icons.Default.Security)
 }
@@ -69,9 +67,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             RadarDeCorridasTheme {
-                var selectedTab by remember { mutableStateOf(AppTab.SIMULATOR) }
-
-                var currentRide by remember { mutableStateOf(SampleRides.list[0]) }
+                var selectedTab by remember { mutableStateOf(AppTab.HOME) }
 
                 var history by remember {
                     mutableStateOf(
@@ -169,38 +165,19 @@ class MainActivity : ComponentActivity() {
                 ) { innerPadding ->
                     Box(modifier = Modifier.padding(innerPadding)) {
                         when (selectedTab) {
-                            AppTab.SIMULATOR -> SimulatorScreen(
+                            AppTab.HOME -> HomeScreen(
                                 settings = settingsState,
-                                currentRide = currentRide,
-                                onSelectRide = {
-                                    currentRide = it
-                                    val eval = RideCalculator.evaluateRide(it, settingsState)
-                                    history = listOf(ScanHistoryItem(eval, null, "Agora mesmo")) + history
-                                },
-                                onRideAction = { eval, action ->
-                                    history = listOf(ScanHistoryItem(eval, action, "Agora mesmo")) + history
-                                    val nextIndex = (SampleRides.list.indexOfFirst { r -> r.id == currentRide.id } + 1) % SampleRides.list.size
-                                    currentRide = SampleRides.list[nextIndex]
-                                },
-                                onToggleRadar = { toggleRadar(it) }
-                            )
-                            AppTab.SETTINGS -> SettingsScreen(
-                                settings = settingsState,
-                                onUpdateSettings = { updateSettings(it) },
-                                onResetDefaults = { updateSettings(DriverSettings(isEnabled = false)) }
-                            )
-                            AppTab.SCANNER -> ScannerScreen(
-                                settings = settingsState,
-                                onSendToPhone = {
-                                    currentRide = it
-                                    selectedTab = AppTab.SIMULATOR
-                                }
+                                onToggleRadar = { toggleRadar(it) },
+                                onNavigateToSystem = { selectedTab = AppTab.SYSTEM }
                             )
                             AppTab.HISTORY -> HistoryScreen(
                                 history = history,
                                 onClearHistory = { history = emptyList() }
                             )
-                            AppTab.SYSTEM -> ServiceStatusScreen()
+                            AppTab.SYSTEM -> ServiceStatusScreen(
+                                settings = settingsState,
+                                onUpdateSettings = { updateSettings(it) }
+                            )
                         }
                     }
                 }
