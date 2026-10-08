@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Círculo externo do Radar -->
+    <path
+        android:strokeColor="#34D399"
+        android:strokeWidth="2.5"
+        android:fillColor="#00000000"
+        android:pathData="M54,54m-30,0a30,30 0,1,1 60,0a30,30 0,1,1 -60,0" />
+    <!-- Círculo intermediário -->
+    <path
+        android:strokeColor="#10B981"
+        android:strokeWidth="2"
+        android:fillColor="#00000000"
+        android:pathData="M54,54m-20,0a20,20 0,1,1 40,0a20,20 0,1,1 -40,0" />
+    <!-- Círculo central -->
+    <path
+        android:strokeColor="#059669"
+        android:strokeWidth="1.5"
+        android:fillColor="#00000000"
+        android:pathData="M54,54m-10,0a10,10 0,1,1 20,0a10,10 0,1,1 -20,0" />
+    <!-- Centro do Radar -->
+    <path
+        android:fillColor="#10B981"
+        android:pathData="M54,54m-4,0a4,4 0,1,1 8,0a4,4 0,1,1 -8,0" />
+    <!-- Retículo do Radar -->
+    <path
+        android:strokeColor="#059669"
+        android:strokeWidth="1.5"
+        android:pathData="M54,20L54,88 M20,54L88,54" />
+    <!-- Alvo detectado (corrida em rota) -->
+    <path
+        android:fillColor="#34D399"
+        android:pathData="M68,38m-3,0a3,3 0,1,1 6,0a3,3 0,1,1 -6,0" />
+</vector>
