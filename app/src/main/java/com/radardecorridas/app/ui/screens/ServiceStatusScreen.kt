@@ -2,26 +2,33 @@ package com.radardecorridas.app.ui.screens
 
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
-import android.provider.Settings
+import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.radardecorridas.app.model.DriverSettings
 import com.radardecorridas.app.service.FloatingOverlayService
 import com.radardecorridas.app.ui.theme.*
+import com.radardecorridas.app.util.DiagnosticHelper
+import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -32,13 +39,10 @@ fun ServiceStatusScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var diagStatus by remember { mutableStateOf(DiagnosticHelper.checkStatus(context)) }
 
-    val hasOverlay = remember(context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Settings.canDrawOverlays(context)
-        } else {
-            true
-        }
+    LaunchedEffect(Unit) {
+        diagStatus = DiagnosticHelper.checkStatus(context)
     }
 
     LazyColumn(
@@ -47,7 +51,7 @@ fun ServiceStatusScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1. Permissões do Sistema
+        // 1. Diagnóstico e Permissões do Sistema
         item {
             Column(
                 modifier = Modifier
@@ -58,61 +62,207 @@ fun ServiceStatusScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Diagnóstico do Sistema Android",
+                        color = White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    IconButton(
+                        onClick = { diagStatus = DiagnosticHelper.checkStatus(context) },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Atualizar",
+                            tint = Slate400,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
                 Text(
-                    text = "Permissões do Sistema Android",
-                    color = White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "O Radar necessita de duas permissões do Android para monitorar ofertas e exibir o pop-up informativo:",
+                    text = "Verifique o estado real dos componentes para assegurar o funcionamento do Radar:",
                     color = Slate400,
                     fontSize = 11.sp
                 )
 
-                // Permissão 1: Sobreposição de tela
-                Button(
-                    onClick = {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                            val intent = Intent(
-                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                Uri.parse("package:${context.packageName}")
-                            )
-                            context.startActivity(intent)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Slate800,
-                        contentColor = if (hasOverlay) Emerald400 else Amber400
-                    ),
-                    shape = RoundedCornerShape(12.dp)
+                // Item 1: Sobreposição de tela
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Slate950)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("1. Sobreposição de Tela", color = White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = if (diagStatus.hasOverlayPermission) "✅ Sobreposição permitida" else "❌ Sobreposição não permitida",
+                                color = if (diagStatus.hasOverlayPermission) Emerald400 else Rose400,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Button(
+                            onClick = { DiagnosticHelper.openOverlaySettings(context) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (diagStatus.hasOverlayPermission) Slate800 else Amber500,
+                                contentColor = if (diagStatus.hasOverlayPermission) Slate200 else Slate950
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Text(
+                                text = if (diagStatus.hasOverlayPermission) "Configurar" else "Conceder",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                // Item 2: Acessibilidade no Android
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Slate950)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("2. Serviço de Acessibilidade", color = White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = if (diagStatus.isAccessibilityEnabledInSystem) "✅ Serviço de acessibilidade ativo no Android" else "❌ Serviço de acessibilidade inativo",
+                                color = if (diagStatus.isAccessibilityEnabledInSystem) Emerald400 else Rose400,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Button(
+                            onClick = { DiagnosticHelper.openAccessibilitySettings(context) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (diagStatus.isAccessibilityEnabledInSystem) Slate800 else Cyan400,
+                                contentColor = if (diagStatus.isAccessibilityEnabledInSystem) Slate200 else Slate950
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.height(34.dp)
+                        ) {
+                            Text(
+                                text = if (diagStatus.isAccessibilityEnabledInSystem) "Configurar" else "Ativar",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                // Item 3: Conexão do Serviço
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Slate950)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text("3. Conexão do Serviço em Tempo Real", color = White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     Text(
-                        text = if (hasOverlay) "✓ 1. Sobreposição de Tela (Concedida)" else "1. Ativar Sobreposição de Tela",
+                        text = if (diagStatus.isServiceConnected) "✅ Serviço conectado e respondendo" else "❌ Serviço não conectado ao app",
+                        color = if (diagStatus.isServiceConnected) Emerald400 else Rose400,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold
+                    )
+                    if (diagStatus.isAccessibilityEnabledInSystem && !diagStatus.isServiceConnected) {
+                        Text(
+                            text = "Aviso: O serviço está ativado nas configurações do Android, porém o processo ainda não está conectado. Desative e ative a chave de acessibilidade para reiniciar.",
+                            color = Amber400,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+
+                // Item 4: Pacotes Monitorados
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Slate950)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text("4. Pacotes de Aplicativos Monitorados", color = White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        text = diagStatus.monitoredPackages.joinToString(", "),
+                        color = Slate400,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace
                     )
                 }
 
-                // Permissão 2: Acessibilidade
-                Button(
-                    onClick = {
-                        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Slate800,
-                        contentColor = Cyan400
-                    ),
-                    shape = RoundedCornerShape(12.dp)
+                // Item 5: Diagnóstico de Eventos
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Slate950)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = "2. Ativar Serviço de Acessibilidade",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("5. Diagnóstico de Recepção de Eventos", color = White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            text = "${diagStatus.totalEventsReceived} recebidos",
+                            color = if (diagStatus.totalEventsReceived > 0) Emerald400 else Slate400,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    if (diagStatus.lastEventPackage != null && diagStatus.lastEventTimestamp > 0) {
+                        val formattedTime = DateFormat.format("HH:mm:ss", Date(diagStatus.lastEventTimestamp)).toString()
+                        Text(
+                            text = "Último evento: ${diagStatus.lastEventPackage} às $formattedTime",
+                            color = Emerald400,
+                            fontSize = 11.sp
+                        )
+                        if (!diagStatus.lastEventTextSnippet.isNullOrEmpty()) {
+                            Text(
+                                text = "Texto: \"${diagStatus.lastEventTextSnippet}\"",
+                                color = Slate400,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace,
+                                maxLines = 2
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "Aguardando primeiro evento da 99 ou Uber...",
+                            color = Slate400,
+                            fontSize = 10.sp
+                        )
+                    }
                 }
 
                 // Testar Pop-up Nativo na tela real
@@ -135,7 +285,7 @@ fun ServiceStatusScreen(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
-                        text = "3. Testar Pop-up Flutuante na Tela",
+                        text = "Testar Pop-up Flutuante Informativo na Tela",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Black
                     )

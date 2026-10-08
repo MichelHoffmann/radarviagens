@@ -30,10 +30,32 @@ class RideScannerAccessibilityService : AccessibilityService() {
             "com.didichuxing.passenger",
             "sinet.startup.inDriver"
         )
+
+        // Variáveis diagnósticas em tempo real
+        @Volatile
+        var isConnected: Boolean = false
+            private set
+
+        @Volatile
+        var lastEventPackage: String? = null
+            private set
+
+        @Volatile
+        var lastEventTimestamp: Long = 0L
+            private set
+
+        @Volatile
+        var lastEventSnippet: String? = null
+            private set
+
+        @Volatile
+        var totalEventsReceived: Long = 0L
+            private set
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        isConnected = true
         prefs = getSharedPreferences("RadarPrefs", Context.MODE_PRIVATE)
 
         val info = AccessibilityServiceInfo().apply {
@@ -62,6 +84,11 @@ class RideScannerAccessibilityService : AccessibilityService() {
             it.contains(pkgName, ignoreCase = true)
         }
         if (!isMatch) return
+
+        // Registra diagnóstico do evento recebido dos pacotes monitorados
+        totalEventsReceived++
+        lastEventPackage = pkgName
+        lastEventTimestamp = System.currentTimeMillis()
 
         val now = System.currentTimeMillis()
         if (now - lastScanTimestamp < 250) return
@@ -98,6 +125,7 @@ class RideScannerAccessibilityService : AccessibilityService() {
         if (allTexts.isEmpty()) return
 
         val fullText = allTexts.joinToString(" ")
+        lastEventSnippet = if (fullText.length > 120) fullText.take(120) + "..." else fullText
         val currentHash = fullText.hashCode()
         if (currentHash == lastScannedHash) return
 
@@ -170,5 +198,17 @@ class RideScannerAccessibilityService : AccessibilityService() {
 
     override fun onInterrupt() {
         Log.d(TAG, "RideScannerAccessibilityService interrompido.")
+    }
+
+    override fun onUnbind(intent: Intent?): Boolean {
+        isConnected = false
+        Log.d(TAG, "RideScannerAccessibilityService desconectado (onUnbind).")
+        return super.onUnbind(intent)
+    }
+
+    override fun onDestroy() {
+        isConnected = false
+        Log.d(TAG, "RideScannerAccessibilityService destruído.")
+        super.onDestroy()
     }
 }

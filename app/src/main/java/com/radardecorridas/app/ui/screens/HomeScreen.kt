@@ -1,5 +1,6 @@
 package com.radardecorridas.app.ui.screens
 
+import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -8,21 +9,22 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.PowerSettingsNew
-import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.radardecorridas.app.model.DriverSettings
 import com.radardecorridas.app.ui.theme.*
+import com.radardecorridas.app.util.DiagnosticHelper
+import java.util.Date
 
 @Composable
 fun HomeScreen(
@@ -31,8 +33,41 @@ fun HomeScreen(
     onNavigateToSystem: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val isEnabled = settings.isEnabled
     val scrollState = rememberScrollState()
+
+    // Estado do diagnóstico
+    var diagStatus by remember { mutableStateOf(DiagnosticHelper.checkStatus(context)) }
+    var showDialog by remember { mutableStateOf(false) }
+
+    // Atualiza diagnóstico quando a tela estiver visível
+    LaunchedEffect(Unit) {
+        diagStatus = DiagnosticHelper.checkStatus(context)
+    }
+
+    // Função de verificação acionada no toque de ativar/desativar
+    val handleActivateClick = {
+        val currentStatus = DiagnosticHelper.checkStatus(context)
+        diagStatus = currentStatus
+
+        if (isEnabled) {
+            // Desativar sempre é permitido imediatamente
+            onToggleRadar(false)
+        } else {
+            // Se ativando: verifica se todos os pré-requisitos essenciais estão cumpridos
+            val canActivate = currentStatus.hasOverlayPermission &&
+                    currentStatus.isAccessibilityEnabledInSystem &&
+                    currentStatus.isServiceConnected
+
+            if (canActivate) {
+                onToggleRadar(true)
+            } else {
+                // Abre o diálogo explicativo com diagnóstico e ações corretivas
+                showDialog = true
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -41,13 +76,13 @@ fun HomeScreen(
             .verticalScroll(scrollState)
             .padding(horizontal = 20.dp, vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(22.dp)
+        verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
         // 1. Nome / Identidade do Radar de Corridas
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(top = 8.dp)
+            modifier = Modifier.padding(top = 4.dp)
         ) {
             Text(
                 text = "Radar de Corridas",
@@ -75,17 +110,17 @@ fun HomeScreen(
                     color = if (isEnabled) Emerald500.copy(alpha = 0.6f) else Slate800,
                     shape = RoundedCornerShape(24.dp)
                 )
-                .padding(24.dp),
+                .padding(22.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 // Indicador visual circular
                 Box(
                     modifier = Modifier
-                        .size(80.dp)
+                        .size(76.dp)
                         .clip(CircleShape)
                         .background(if (isEnabled) Emerald500.copy(alpha = 0.15f) else Slate800),
                     contentAlignment = Alignment.Center
@@ -94,7 +129,7 @@ fun HomeScreen(
                         imageVector = Icons.Default.PowerSettingsNew,
                         contentDescription = null,
                         tint = if (isEnabled) Emerald400 else Slate400,
-                        modifier = Modifier.size(42.dp)
+                        modifier = Modifier.size(40.dp)
                     )
                 }
 
@@ -114,7 +149,7 @@ fun HomeScreen(
                         text = if (isEnabled)
                             "Pronto e monitorando ofertas de corrida em segundo plano"
                         else
-                            "Toque no botão abaixo para ativar o monitoramento",
+                            "Toque no botão abaixo para testar requisitos e ativar",
                         color = Slate400,
                         fontSize = 12.sp,
                         textAlign = TextAlign.Center
@@ -125,7 +160,7 @@ fun HomeScreen(
 
         // 3. Botão Principal Grande (ATIVAR RADAR / DESATIVAR RADAR)
         Button(
-            onClick = { onToggleRadar(!isEnabled) },
+            onClick = handleActivateClick,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(62.dp),
@@ -150,7 +185,141 @@ fun HomeScreen(
             )
         }
 
-        // 4. Explicação Curta e Objetiva
+        // 4. Cartão de Diagnóstico Rápido em Tempo Real
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = Slate900),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Slate800)
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Checklist,
+                            contentDescription = null,
+                            tint = Cyan400,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Status dos Pré-Requisitos",
+                            color = White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    IconButton(
+                        onClick = { diagStatus = DiagnosticHelper.checkStatus(context) },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Atualizar",
+                            tint = Slate400,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+
+                Divider(color = Slate800, thickness = 1.dp)
+
+                // Item 1: Sobreposição
+                DiagnosticRow(
+                    isOk = diagStatus.hasOverlayPermission,
+                    title = "Sobreposição de Tela",
+                    statusOkText = "Sobreposição permitida",
+                    statusFailText = "Sobreposição não permitida",
+                    actionLabel = if (!diagStatus.hasOverlayPermission) "Conceder" else null,
+                    onAction = { DiagnosticHelper.openOverlaySettings(context) }
+                )
+
+                // Item 2: Acessibilidade Habilitada no Android
+                DiagnosticRow(
+                    isOk = diagStatus.isAccessibilityEnabledInSystem,
+                    title = "Acessibilidade no Android",
+                    statusOkText = "Serviço de acessibilidade ativo",
+                    statusFailText = "Serviço de acessibilidade inativo",
+                    actionLabel = if (!diagStatus.isAccessibilityEnabledInSystem) "Ativar" else null,
+                    onAction = { DiagnosticHelper.openAccessibilitySettings(context) }
+                )
+
+                // Item 3: Serviço Realmente Conectado
+                DiagnosticRow(
+                    isOk = diagStatus.isServiceConnected,
+                    title = "Comunicação com o App",
+                    statusOkText = "Serviço conectado ao app",
+                    statusFailText = "Serviço não responde (desconectado)",
+                    actionLabel = if (!diagStatus.isServiceConnected) "Reiniciar" else null,
+                    onAction = { DiagnosticHelper.openAccessibilitySettings(context) }
+                )
+
+                // Item 4: Último Evento / Teste de Recepção
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Slate950)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Monitoramento 99 / Uber",
+                            color = Slate200,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "${diagStatus.totalEventsReceived} eventos",
+                            color = if (diagStatus.totalEventsReceived > 0) Emerald400 else Slate400,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    if (diagStatus.lastEventPackage != null && diagStatus.lastEventTimestamp > 0) {
+                        val formattedTime = DateFormat.format("HH:mm:ss", Date(diagStatus.lastEventTimestamp)).toString()
+                        Text(
+                            text = "Último evento de: ${diagStatus.lastEventPackage} às $formattedTime",
+                            color = Emerald400,
+                            fontSize = 11.sp
+                        )
+                        if (!diagStatus.lastEventTextSnippet.isNullOrEmpty()) {
+                            Text(
+                                text = "\"${diagStatus.lastEventTextSnippet}\"",
+                                color = Slate400,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace,
+                                maxLines = 2
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = "Nenhum evento capturado ainda. Abra o aplicativo da 99 para testar o recebimento.",
+                            color = Slate400,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            }
+        }
+
+        // 5. Explicação Curta e Objetiva
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -187,7 +356,7 @@ fun HomeScreen(
             }
         }
 
-        // 5. Atalho para permissões e configurações no Sistema
+        // 6. Atalho para permissões e configurações no Sistema
         OutlinedButton(
             onClick = onNavigateToSystem,
             modifier = Modifier
@@ -217,5 +386,200 @@ fun HomeScreen(
         }
 
         Spacer(modifier = Modifier.height(12.dp))
+    }
+
+    // Diálogo de Pré-Requisitos Pendentes
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            containerColor = Slate900,
+            titleContentColor = White,
+            textContentColor = Slate200,
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = Amber400
+                    )
+                    Text("Configuração Necessária", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text(
+                        text = "O Radar não pôde ser ativado porque um ou mais pré-requisitos essenciais ainda não estão prontos:",
+                        fontSize = 13.sp,
+                        color = Slate400
+                    )
+
+                    // Diagnóstico 1
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (diagStatus.hasOverlayPermission) "✅ Sobreposição permitida" else "❌ Sobreposição não permitida",
+                                color = if (diagStatus.hasOverlayPermission) Emerald400 else Rose400,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        if (!diagStatus.hasOverlayPermission) {
+                            TextButton(onClick = {
+                                DiagnosticHelper.openOverlaySettings(context)
+                                showDialog = false
+                            }) {
+                                Text("Permitir", color = Cyan400, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    // Diagnóstico 2
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (diagStatus.isAccessibilityEnabledInSystem) "✅ Serviço de acessibilidade ativo" else "❌ Serviço de acessibilidade inativo",
+                                color = if (diagStatus.isAccessibilityEnabledInSystem) Emerald400 else Rose400,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        if (!diagStatus.isAccessibilityEnabledInSystem) {
+                            TextButton(onClick = {
+                                DiagnosticHelper.openAccessibilitySettings(context)
+                                showDialog = false
+                            }) {
+                                Text("Ativar", color = Cyan400, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    // Diagnóstico 3
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (diagStatus.isServiceConnected) "✅ Serviço conectado" else "❌ Serviço não conectado",
+                                color = if (diagStatus.isServiceConnected) Emerald400 else Rose400,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            if (diagStatus.isAccessibilityEnabledInSystem && !diagStatus.isServiceConnected) {
+                                Text(
+                                    text = "O Android pode ter congelado o processo. Desative e reative a acessibilidade.",
+                                    color = Slate400,
+                                    fontSize = 11.sp
+                                )
+                            }
+                        }
+                        if (!diagStatus.isServiceConnected) {
+                            TextButton(onClick = {
+                                DiagnosticHelper.openAccessibilitySettings(context)
+                                showDialog = false
+                            }) {
+                                Text("Reabrir", color = Cyan400, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    // Explicação de segurança
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Slate950)
+                            .padding(10.dp)
+                    ) {
+                        Text(
+                            text = "Sem essas permissões o Radar não consegue observar as ofertas na tela da 99 nem exibir o pop-up informativo.",
+                            fontSize = 11.sp,
+                            color = Slate400
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        diagStatus = DiagnosticHelper.checkStatus(context)
+                        if (diagStatus.hasOverlayPermission && diagStatus.isAccessibilityEnabledInSystem && diagStatus.isServiceConnected) {
+                            showDialog = false
+                            onToggleRadar(true)
+                        } else {
+                            showDialog = false
+                        }
+                    }
+                ) {
+                    Text("OK, Entendi", color = Emerald400, fontWeight = FontWeight.Bold)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun DiagnosticRow(
+    isOk: Boolean,
+    title: String,
+    statusOkText: String,
+    statusFailText: String,
+    actionLabel: String?,
+    onAction: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                color = Slate400,
+                fontSize = 11.sp
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = if (isOk) "✅" else "❌",
+                    fontSize = 12.sp
+                )
+                Text(
+                    text = if (isOk) statusOkText else statusFailText,
+                    color = if (isOk) Emerald400 else Rose400,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        if (actionLabel != null) {
+            FilledTonalButton(
+                onClick = onAction,
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = Slate800,
+                    contentColor = Cyan400
+                ),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                modifier = Modifier.height(32.dp)
+            ) {
+                Text(actionLabel, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }

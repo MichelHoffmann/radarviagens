@@ -29,6 +29,7 @@ import com.radardecorridas.app.model.ScanHistoryItem
 import com.radardecorridas.app.service.FloatingOverlayService
 import com.radardecorridas.app.ui.screens.*
 import com.radardecorridas.app.ui.theme.*
+import com.radardecorridas.app.util.DiagnosticHelper
 import com.radardecorridas.app.util.RideCalculator
 
 enum class AppTab(val title: String, val icon: ImageVector) {
@@ -202,11 +203,18 @@ class MainActivity : ComponentActivity() {
                     "Conceda a permissão de sobreposição para exibir o botão flutuante.",
                     Toast.LENGTH_LONG
                 ).show()
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                )
-                startActivity(intent)
+                DiagnosticHelper.openOverlaySettings(this)
+                return
+            }
+
+            // Exige também que o serviço de acessibilidade esteja ativo
+            if (!DiagnosticHelper.isAccessibilityServiceEnabled(this)) {
+                Toast.makeText(
+                    this,
+                    "Ative o serviço de acessibilidade do Radar de Corridas.",
+                    Toast.LENGTH_LONG
+                ).show()
+                DiagnosticHelper.openAccessibilitySettings(this)
                 return
             }
 
