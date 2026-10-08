@@ -179,7 +179,7 @@ fun HomeScreen(
                     )
                     Text(
                         text = "O Radar analisa as ofertas de corrida e mostra classificação, R$/km e R$/h. Ele não aceita nem recusa corridas.",
-                        color = Slate300,
+                        color = Slate400,
                         fontSize = 12.sp,
                         lineHeight = 18.sp
                     )
@@ -196,7 +196,7 @@ fun HomeScreen(
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.outlinedButtonColors(
                 containerColor = Slate900,
-                contentColor = Slate300
+                contentColor = Slate200
             ),
             border = ButtonDefaults.outlinedButtonBorder.copy(
                 brush = androidx.compose.ui.graphics.SolidColor(Slate800)
