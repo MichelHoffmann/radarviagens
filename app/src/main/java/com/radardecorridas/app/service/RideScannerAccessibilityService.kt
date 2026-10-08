@@ -9,8 +9,11 @@ import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.radardecorridas.app.model.DriverSettings
+import com.radardecorridas.app.util.AccessibilityEventLog
 import com.radardecorridas.app.util.OcrParser
 import com.radardecorridas.app.util.RideCalculator
+import java.util.Collections
+import java.util.LinkedList
 
 class RideScannerAccessibilityService : AccessibilityService() {
 
@@ -20,15 +23,23 @@ class RideScannerAccessibilityService : AccessibilityService() {
 
     companion object {
         private const val TAG = "RideScannerService"
+
         val SUPPORTED_PACKAGES = arrayOf(
-            "com.ubercab.driver",
-            "com.ubercab",
             "com.taxis99.driver",
             "com.taxis99",
             "com.didiglobal.driver",
+            "com.didiglobal.motorista",
+            "com.didiglobal.passenger",
             "com.didichuxing.driver",
             "com.didichuxing.passenger",
-            "sinet.startup.inDriver"
+            "com.didi.global.driver",
+            "com.didi.brazil.driver",
+            "com.xiaojukeji.didi.brazil.driver",
+            "com.xiaojukeji.didi.brazil.customer",
+            "com.ubercab.driver",
+            "com.ubercab",
+            "sinet.startup.inDriver",
+            "com.indrive"
         )
 
         // Variáveis diagnósticas em tempo real
@@ -51,6 +62,63 @@ class RideScannerAccessibilityService : AccessibilityService() {
         @Volatile
         var totalEventsReceived: Long = 0L
             private set
+
+        @Volatile
+        var totalRawEvents: Long = 0L
+            private set
+
+        @Volatile
+        var lastSeenPackage: String? = null
+            private set
+
+        private val _eventLogs = Collections.synchronizedList(LinkedList<AccessibilityEventLog>())
+
+        fun getRecentLogs(): List<AccessibilityEventLog> {
+            return synchronized(_eventLogs) {
+                _eventLogs.toList()
+            }
+        }
+
+        fun clearLogs() {
+            synchronized(_eventLogs) {
+                _eventLogs.clear()
+            }
+        }
+
+        fun addLog(log: AccessibilityEventLog) {
+            synchronized(_eventLogs) {
+                if (_eventLogs.size >= 30) {
+                    _eventLogs.removeFirst()
+                }
+                _eventLogs.add(log)
+            }
+        }
+
+        fun isTargetPackage(pkg: String): Boolean {
+            val lower = pkg.lowercase()
+            return lower.contains("99") ||
+                    lower.contains("didi") ||
+                    lower.contains("xiaojukeji") ||
+                    lower.contains("uber") ||
+                    lower.contains("indriver") ||
+                    lower.contains("indrive")
+        }
+
+        fun formatEventType(type: Int): String {
+            return when (type) {
+                AccessibilityEvent.TYPE_VIEW_CLICKED -> "VIEW_CLICKED"
+                AccessibilityEvent.TYPE_VIEW_FOCUSED -> "VIEW_FOCUSED"
+                AccessibilityEvent.TYPE_VIEW_SCROLLED -> "VIEW_SCROLLED"
+                AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> "VIEW_TEXT_CHANGED"
+                AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> "WINDOW_STATE_CHANGED"
+                AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED -> "NOTIFICATION_STATE_CHANGED"
+                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> "WINDOW_CONTENT_CHANGED"
+                AccessibilityEvent.TYPE_WINDOWS_CHANGED -> "WINDOWS_CHANGED"
+                AccessibilityEvent.TYPE_ANNOUNCEMENT -> "ANNOUNCEMENT"
+                AccessibilityEvent.TYPE_ASSIST_READING_CONTEXT -> "ASSIST_READING_CONTEXT"
+                else -> "TIPO_$type"
+            }
+        }
     }
 
     override fun onServiceConnected() {
@@ -58,60 +126,87 @@ class RideScannerAccessibilityService : AccessibilityService() {
         isConnected = true
         prefs = getSharedPreferences("RadarPrefs", Context.MODE_PRIVATE)
 
+        // Configuração dinâmica da Acessibilidade
         val info = AccessibilityServiceInfo().apply {
-            eventTypes = AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED or
-                    AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or
-                    AccessibilityEvent.TYPE_WINDOWS_CHANGED
-            packageNames = SUPPORTED_PACKAGES
+            // Monitora TODOS os tipos de eventos para não perder alertas, popups ou notificações
+            eventTypes = AccessibilityEvent.TYPES_ALL_MASK
+
+            // CRUCIAL: packageNames = null faz o Android entregar eventos de qualquer app
+            // Isso garante que se a 99 usar um package ligeiramente diferente no aparelho,
+            // ou se a oferta vier por janela flutuante/sistema, o evento NUNCA será descartado pelo Android!
+            packageNames = null
+
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
-            notificationTimeout = 80
+            notificationTimeout = 50
             flags = AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
                     AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
                     AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
         }
         serviceInfo = info
-        Log.i(TAG, "RideScannerAccessibilityService conectado. Monitorando pacotes: ${SUPPORTED_PACKAGES.joinToString()}")
+        Log.i(TAG, "RideScannerAccessibilityService conectado. Monitoramento total ativado (packageNames=null, eventTypes=ALL).")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        val isEnabled = prefs.getBoolean("is_enabled", false)
-        if (!isEnabled || event == null) return
+        if (event == null) return
 
-        val pkgName = event.packageName?.toString() ?: return
-        val isMatch = SUPPORTED_PACKAGES.any {
-            pkgName.equals(it, ignoreCase = true) ||
-            pkgName.contains(it, ignoreCase = true) ||
-            it.contains(pkgName, ignoreCase = true)
+        // 1. Contador bruto de qualquer evento recebido pelo Android (comprova que o serviço está recebendo eventos do OS)
+        totalRawEvents++
+
+        val pkgName = event.packageName?.toString() ?: "desconhecido"
+        lastSeenPackage = pkgName
+
+        // Verifica se é pacote alvo conhecido (99, DiDi, Uber, inDrive)
+        val isTarget = isTargetPackage(pkgName)
+
+        // Coleta textos diretos do evento (toasters, avisos, notificações)
+        val eventTexts = mutableListOf<String>()
+        event.text?.forEach { charSeq ->
+            val str = charSeq.toString().trim()
+            if (str.isNotEmpty()) eventTexts.add(str)
         }
-        if (!isMatch) return
+        val eventTextCombined = eventTexts.joinToString(" ")
 
-        // Registra diagnóstico do evento recebido dos pacotes monitorados
+        val containsRideKeywords = eventTextCombined.contains("99", ignoreCase = true) ||
+                eventTextCombined.contains("didi", ignoreCase = true) ||
+                eventTextCombined.contains("uber", ignoreCase = true) ||
+                eventTextCombined.contains("corrida", ignoreCase = true) ||
+                eventTextCombined.contains("passageiro", ignoreCase = true)
+
+        // Se não for nem o pacote da 99/Uber nem evento do sistema com palavras de corrida, ignora
+        if (!isTarget && !containsRideKeywords) {
+            return
+        }
+
+        // 2. Incrementa contador de eventos de apps de corrida
         totalEventsReceived++
         lastEventPackage = pkgName
         lastEventTimestamp = System.currentTimeMillis()
 
-        val now = System.currentTimeMillis()
-        if (now - lastScanTimestamp < 250) return
+        val eventTypeName = formatEventType(event.eventType)
 
+        // 3. Extrai TODOS os nós e textos disponíveis
         val allTexts = LinkedHashSet<String>()
+        allTexts.addAll(eventTexts)
 
-        // 1. Captura textos do próprio evento (ex: toasters, alerts, accessibility announcements)
-        event.text?.forEach { charSeq ->
-            val textStr = charSeq.toString().trim()
-            if (textStr.isNotEmpty()) allTexts.add(textStr)
+        // Fonte 1: da árvore do evento (event.source)
+        try {
+            event.source?.let { sourceNode ->
+                extractAllTexts(sourceNode, allTexts)
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Erro ao extrair event.source: ${e.message}")
         }
 
-        // 2. Extrai nós da árvore a partir de event.source
-        event.source?.let { sourceNode ->
-            extractAllTexts(sourceNode, allTexts)
+        // Fonte 2: da janela ativa (rootInActiveWindow)
+        try {
+            rootInActiveWindow?.let { rootNode ->
+                extractAllTexts(rootNode, allTexts)
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Erro ao extrair rootInActiveWindow: ${e.message}")
         }
 
-        // 3. Extrai nós de rootInActiveWindow
-        rootInActiveWindow?.let { rootNode ->
-            extractAllTexts(rootNode, allTexts)
-        }
-
-        // 4. Se ainda tiver poucos dados ou janela flutuante, percorre todas as interactive windows
+        // Fonte 3: de todas as janelas interativas (popups, dialogs, overlays)
         try {
             windows?.forEach { window ->
                 window.root?.let { windowRoot ->
@@ -122,28 +217,61 @@ class RideScannerAccessibilityService : AccessibilityService() {
             Log.d(TAG, "Erro ao iterar windows: ${e.message}")
         }
 
-        if (allTexts.isEmpty()) return
-
         val fullText = allTexts.joinToString(" ")
         lastEventSnippet = if (fullText.length > 120) fullText.take(120) + "..." else fullText
-        val currentHash = fullText.hashCode()
-        if (currentHash == lastScannedHash) return
 
-        // Log detalhado de diagnóstico para confirmar o que chega ao serviço
-        Log.d(TAG, "[DIAGNOSTICO] Evento recebido de $pkgName (tipo=${event.eventType}). Textos capturados (${allTexts.size}): $fullText")
+        // 4. Diagnóstico com o parser de OCR
+        val parsedRide = if (allTexts.isNotEmpty()) OcrParser.parseRideText(fullText) else null
 
-        val parsedRide = OcrParser.parseRideText(fullText)
-        if (parsedRide == null) {
-            Log.v(TAG, "[DIAGNOSTICO] Textos analisados, mas nenhuma oferta completa reconhecida ainda.")
+        val parserStatus = when {
+            parsedRide != null -> "✅ OFERTA DETECTADA (R$${parsedRide.price} | ${parsedRide.totalDistanceKm}km | ${parsedRide.totalDurationMin}min)"
+            allTexts.isEmpty() -> "⚠️ Árvore de acessibilidade sem textos (possível tela protegida ou SurfaceView)"
+            fullText.contains("R$") || fullText.contains("aceitar", ignoreCase = true) -> "⚠️ Contém R$/Aceitar, mas campos incompletos (km ou tempo não fecharam)"
+            else -> "ℹ️ Tela informativa/mapa (sem oferta completa no momento)"
+        }
+
+        // 5. Adiciona entrada no log de diagnóstico para a UI em tempo real
+        val logEntry = AccessibilityEventLog(
+            timestamp = System.currentTimeMillis(),
+            packageName = pkgName,
+            eventType = eventTypeName,
+            eventTextSnippet = if (eventTexts.isNotEmpty()) eventTexts.joinToString(" | ").take(80) else null,
+            nodeCount = allTexts.size,
+            treeTextSnippet = if (fullText.length > 160) fullText.take(160) + "..." else fullText,
+            parserVerdict = parserStatus,
+            isTargetApp = true
+        )
+        addLog(logEntry)
+
+        Log.i(
+            TAG,
+            "[DIAGNOSTICO-99] Pacote: $pkgName | Tipo: $eventTypeName | Textos(${allTexts.size}): $fullText | Status: $parserStatus"
+        )
+
+        // 6. Verifica se o Radar está ativado pelo usuário antes de disparar o pop-up
+        val isEnabled = prefs.getBoolean("is_enabled", false)
+        if (!isEnabled) {
+            Log.d(TAG, "Radar DESATIVADO nas configurações. Evento diagnosticado mas popup não exibido.")
             return
         }
 
+        if (parsedRide == null) return
+
+        // 7. Evita notificações repetidas para a mesma oferta
+        val currentHash = "${parsedRide.price}_${parsedRide.totalDistanceKm}_${parsedRide.totalDurationMin}".hashCode()
+        val now = System.currentTimeMillis()
+        if (currentHash == lastScannedHash && now - lastScanTimestamp < 8000) {
+            return
+        }
         lastScannedHash = currentHash
         lastScanTimestamp = now
 
-        Log.i(TAG, "[SUCESSO] Oferta detectada com sucesso! App: ${parsedRide.app}, Valor: R$${parsedRide.price}, Distância: ${parsedRide.totalDistanceKm}km, Tempo: ${parsedRide.totalDurationMin}min")
+        Log.i(
+            TAG,
+            "[SUCESSO] Disparando popup para oferta da ${parsedRide.app}: R$${parsedRide.price}, ${parsedRide.totalDistanceKm}km, ${parsedRide.totalDurationMin}min"
+        )
 
-        // Lê metas configuradas pelo motorista
+        // 8. Lê metas configuradas pelo motorista
         val minKm = prefs.getFloat("min_price_per_km", 2.00f).toDouble()
         val minHour = prefs.getFloat("min_price_per_hour", 35.00f).toDouble()
         val fuelPrice = prefs.getFloat("fuel_price", 5.85f).toDouble()
