@@ -261,7 +261,7 @@ fun ServiceStatusScreen(
                     ) {
                         Text(
                             text = "Eventos globais OS: ${diagStatus.totalRawEvents}",
-                            color = Slate300,
+                            color = Slate200,
                             fontSize = 10.sp,
                             fontFamily = FontFamily.Monospace
                         )
@@ -412,7 +412,7 @@ fun ServiceStatusScreen(
                                         }
                                         Text(
                                             text = "Pkg: ${log.packageName}",
-                                            color = Slate300,
+                                            color = Slate200,
                                             fontSize = 8.sp,
                                             fontFamily = FontFamily.Monospace
                                         )
