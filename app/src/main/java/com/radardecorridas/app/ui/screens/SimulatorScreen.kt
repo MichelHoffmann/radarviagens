@@ -104,7 +104,7 @@ fun SimulatorScreen(
                     onClick = { onToggleRadar(!settings.isEnabled) },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (settings.isEnabled) Rose600 else Emerald500,
+                        containerColor = if (settings.isEnabled) Rose500 else Emerald500,
                         contentColor = if (settings.isEnabled) White else Slate950
                     ),
                     shape = RoundedCornerShape(12.dp),
@@ -134,14 +134,14 @@ fun SimulatorScreen(
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(10.dp))
                             .background(Amber950.copy(alpha = 0.5f))
-                            .border(1.dp, Amber600, RoundedCornerShape(10.dp))
+                            .border(1.dp, Amber500, RoundedCornerShape(10.dp))
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             "Sobreposição de Tela necessária para o botão flutuante",
-                            color = Amber300,
+                            color = Amber400,
                             fontSize = 10.sp,
                             modifier = Modifier.weight(1f)
                         )
