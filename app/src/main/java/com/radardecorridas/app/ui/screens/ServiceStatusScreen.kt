@@ -85,6 +85,7 @@ fun ServiceStatusScreen(
                 Button(
                     onClick = {
                         val intent = Intent(context, FloatingOverlayService::class.java).apply {
+                            action = FloatingOverlayService.ACTION_SHOW_POPUP
                             putExtra("APP_NAME", "Uber")
                             putExtra("PRICE", 38.50)
                             putExtra("TOTAL_KM", 12.0)

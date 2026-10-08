@@ -12,7 +12,7 @@ import { NativeAndroidCodeView } from './components/NativeAndroidCodeView';
 import { playAlertSound } from './utils/audioAlerts';
 
 const DEFAULT_SETTINGS: DriverSettings = {
-  isEnabled: true,
+  isEnabled: false,
   minPricePerKm: 2.00,
   minPricePerHour: 35.00,
   fuelPricePerLiter: 5.85,

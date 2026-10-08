@@ -1,5 +1,9 @@
 package com.radardecorridas.app.ui.screens
 
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -9,14 +13,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -30,7 +35,6 @@ import com.radardecorridas.app.ui.components.FloatingOverlayBadge
 import com.radardecorridas.app.ui.components.ManualRideTesterCard
 import com.radardecorridas.app.ui.theme.*
 import com.radardecorridas.app.util.RideCalculator
-import java.util.Locale
 import kotlin.math.roundToInt
 
 @Composable
@@ -39,8 +43,10 @@ fun SimulatorScreen(
     currentRide: RideData,
     onSelectRide: (RideData) -> Unit,
     onRideAction: (RideEvaluation, String) -> Unit,
+    onToggleRadar: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     var overlayOffsetX by remember { mutableFloatStateOf(20f) }
     var overlayOffsetY by remember { mutableFloatStateOf(80f) }
     var isOverlayVisible by remember { mutableStateOf(true) }
@@ -55,6 +61,109 @@ fun SimulatorScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // 1. Painel Mestre de Ativação do Radar (Controle Principal na Tela Inicial)
+        item {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Slate900)
+                    .border(
+                        1.5.dp,
+                        if (settings.isEnabled) Emerald500 else Slate800,
+                        RoundedCornerShape(20.dp)
+                    )
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Radar de Corridas (Uber e 99)",
+                            color = White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            if (settings.isEnabled)
+                                "🟢 ATIVO: Botão flutuante na tela e escaneamento ligado"
+                            else
+                                "⚪ DESATIVADO: Botão flutuante e escaneamento desligados",
+                            color = if (settings.isEnabled) Emerald400 else Slate400,
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+
+                // Botão de Ação Principal: Ativar Radar / Desativar Radar
+                Button(
+                    onClick = { onToggleRadar(!settings.isEnabled) },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (settings.isEnabled) Rose600 else Emerald500,
+                        contentColor = if (settings.isEnabled) White else Slate950
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                ) {
+                    Icon(
+                        if (settings.isEnabled) Icons.Default.Stop else Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        if (settings.isEnabled) "DESATIVAR RADAR" else "ATIVAR RADAR",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Black
+                    )
+                }
+
+                // Aviso de Permissão de Sobreposição se não estiver concedida
+                val hasOverlayPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    Settings.canDrawOverlays(context)
+                } else true
+
+                if (!hasOverlayPermission) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Amber950.copy(alpha = 0.5f))
+                            .border(1.dp, Amber600, RoundedCornerShape(10.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Sobreposição de Tela necessária para o botão flutuante",
+                            color = Amber300,
+                            fontSize = 10.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(
+                            onClick = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                    val intent = Intent(
+                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:${context.packageName}")
+                                    )
+                                    context.startActivity(intent)
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                        ) {
+                            Text("Conceder", color = Emerald400, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+
         // Mockup do Smartphone com a Corrida e o Pop-up Flutuante
         item {
             Box(
@@ -158,6 +267,7 @@ fun SimulatorScreen(
                             ) {
                                 Text("Recusar", fontSize = 11.sp)
                             }
+
                             Button(
                                 onClick = { onRideAction(evaluation, "accepted") },
                                 modifier = Modifier.weight(2f),
@@ -185,9 +295,7 @@ fun SimulatorScreen(
                             FloatingOverlayBadge(
                                 evaluation = evaluation,
                                 settings = settings,
-                                onClose = { isOverlayVisible = false },
-                                onAccept = { onRideAction(evaluation, "accepted") },
-                                onDecline = { onRideAction(evaluation, "declined") }
+                                onClose = { isOverlayVisible = false }
                             )
                         }
                     } else if (!settings.isEnabled) {
@@ -202,7 +310,7 @@ fun SimulatorScreen(
                                 .padding(horizontal = 14.dp, vertical = 8.dp)
                         ) {
                             Text(
-                                "Radar Desativado - Ative nas Configurações",
+                                "Radar Desativado — Toque em Ativar Radar acima",
                                 color = White,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold

@@ -38,7 +38,7 @@ data class RideEvaluation(
 )
 
 data class DriverSettings(
-    val isEnabled: Boolean = true,
+    val isEnabled: Boolean = false,
     val minPricePerKm: Double = 2.00,
     val minPricePerHour: Double = 35.00,
     val fuelPricePerLiter: Double = 5.85,
