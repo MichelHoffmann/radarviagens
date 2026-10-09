@@ -147,13 +147,7 @@ fun SimulatorScreen(
                         )
                         TextButton(
                             onClick = {
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                    val intent = Intent(
-                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                        Uri.parse("package:${context.packageName}")
-                                    )
-                                    context.startActivity(intent)
-                                }
+                                DiagnosticHelper.openOverlaySettings(context)
                             },
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
                         ) {

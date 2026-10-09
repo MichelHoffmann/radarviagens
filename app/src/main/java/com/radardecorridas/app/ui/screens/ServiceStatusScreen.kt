@@ -20,10 +20,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.radardecorridas.app.model.DriverSettings
 import com.radardecorridas.app.service.FloatingOverlayService
 import com.radardecorridas.app.ui.theme.*
@@ -40,9 +43,23 @@ fun ServiceStatusScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var diagStatus by remember { mutableStateOf(DiagnosticHelper.checkStatus(context)) }
     var showLogsExpanded by remember { mutableStateOf(true) }
     var copiedMessage by remember { mutableStateOf<String?>(null) }
+
+    // Reavalia o estado dos requisitos imediatamente no retorno das configurações (ON_RESUME)
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                diagStatus = DiagnosticHelper.checkStatus(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -121,21 +138,23 @@ fun ServiceStatusScreen(
                                 fontWeight = FontWeight.Bold
                             )
                         }
-                        Button(
-                            onClick = { DiagnosticHelper.openOverlaySettings(context) },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (diagStatus.hasOverlayPermission) Slate800 else Amber500,
-                                contentColor = if (diagStatus.hasOverlayPermission) Slate200 else Slate950
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                            modifier = Modifier.height(34.dp)
-                        ) {
-                            Text(
-                                text = if (diagStatus.hasOverlayPermission) "Configurar" else "Conceder",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                        if (!diagStatus.hasOverlayPermission) {
+                            Button(
+                                onClick = { DiagnosticHelper.openOverlaySettings(context) },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = Amber500,
+                                    contentColor = Slate950
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                modifier = Modifier.height(34.dp)
+                            ) {
+                                Text(
+                                    text = "Conceder",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
                         }
                     }
                 }
@@ -242,8 +261,11 @@ fun ServiceStatusScreen(
                     ) {
                         Text("5. Monitoramento 99 / Uber", color = White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                         Text(
-                            text = "${diagStatus.totalEventsReceived} eventos 99",
-                            color = if (diagStatus.totalEventsReceived > 0) Emerald400 else Amber400,
+                            text = if (diagStatus.detectedPopupsCount > 0)
+                                "${diagStatus.detectedPopupsCount} corridas detectadas (${diagStatus.totalEventsReceived} eventos)"
+                            else
+                                "${diagStatus.totalEventsReceived} eventos 99",
+                            color = if (diagStatus.detectedPopupsCount > 0) Emerald400 else if (diagStatus.totalEventsReceived > 0) Cyan400 else Amber400,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold
                         )
@@ -260,9 +282,10 @@ fun ServiceStatusScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Eventos globais OS: ${diagStatus.totalRawEvents}",
-                            color = Slate200,
+                            text = "Pop-ups 99: ${diagStatus.detectedPopupsCount}",
+                            color = if (diagStatus.detectedPopupsCount > 0) Emerald400 else Slate200,
                             fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
                             fontFamily = FontFamily.Monospace
                         )
                         Text(
@@ -433,7 +456,10 @@ fun ServiceStatusScreen(
                                         )
                                         Text(
                                             text = log.parserVerdict,
-                                            color = if (log.parserVerdict.startsWith("✅")) Emerald400 else if (log.parserVerdict.startsWith("⚠️")) Amber400 else Slate400,
+                                            color = if (log.parserVerdict.startsWith("🎉") || log.parserVerdict.startsWith("✅")) Emerald400
+                                                else if (log.parserVerdict.startsWith("🔄")) Cyan400
+                                                else if (log.parserVerdict.startsWith("⚠️")) Amber400
+                                                else Slate400,
                                             fontSize = 8.sp,
                                             fontWeight = FontWeight.SemiBold
                                         )

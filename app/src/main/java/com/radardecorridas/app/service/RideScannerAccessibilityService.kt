@@ -35,6 +35,10 @@ class RideScannerAccessibilityService : AccessibilityService() {
             "com.didi.brazil.driver",
             "com.xiaojukeji.didi.brazil.driver",
             "com.xiaojukeji.didi.brazil.customer",
+            "com.sdu.didi.gui",
+            "com.sdu.didi.gsui",
+            "com.didi.passenger",
+            "com.didiglobal.customer",
             "com.ubercab.driver",
             "com.ubercab",
             "sinet.startup.inDriver",
@@ -70,6 +74,18 @@ class RideScannerAccessibilityService : AccessibilityService() {
         var lastSeenPackage: String? = null
             private set
 
+        @Volatile
+        var detectedPopupsCount: Long = 0L
+            private set
+
+        @Volatile
+        var lastDetectedOfferFingerprint: String? = null
+            private set
+
+        @Volatile
+        var lastDetectedOfferTimestamp: Long = 0L
+            private set
+
         private val _eventLogs = Collections.synchronizedList(LinkedList<AccessibilityEventLog>())
 
         fun getRecentLogs(): List<AccessibilityEventLog> {
@@ -82,6 +98,9 @@ class RideScannerAccessibilityService : AccessibilityService() {
             synchronized(_eventLogs) {
                 _eventLogs.clear()
             }
+            detectedPopupsCount = 0L
+            lastDetectedOfferFingerprint = null
+            lastDetectedOfferTimestamp = 0L
         }
 
         fun addLog(log: AccessibilityEventLog) {
@@ -135,7 +154,7 @@ class RideScannerAccessibilityService : AccessibilityService() {
         if (event == null) return
 
         try {
-            val pkgName = event.packageName?.toString() ?: return
+            val pkgName = (event.packageName ?: event.source?.packageName)?.toString() ?: return
 
             // Verifica se é aplicativo alvo monitorado
             if (!isTargetPackage(pkgName)) return
@@ -158,7 +177,28 @@ class RideScannerAccessibilityService : AccessibilityService() {
                 if (!str.isNullOrEmpty()) allTexts.add(str)
             }
 
-            // 2. Nós da janela ativa ou fonte do evento
+            // 2. Descrição de conteúdo do próprio evento
+            event.contentDescription?.toString()?.trim()?.let {
+                if (it.isNotEmpty()) allTexts.add(it)
+            }
+
+            // 3. Registros adicionais do evento (AccessibilityRecord)
+            for (i in 0 until event.recordCount) {
+                try {
+                    val record = event.getRecord(i) ?: continue
+                    record.text?.forEach { cs ->
+                        val s = cs?.toString()?.trim()
+                        if (!s.isNullOrEmpty()) allTexts.add(s)
+                    }
+                    record.contentDescription?.toString()?.trim()?.let {
+                        if (it.isNotEmpty()) allTexts.add(it)
+                    }
+                } catch (e: Exception) {
+                    // Ignora falha de record específico
+                }
+            }
+
+            // 4. Nós da janela ativa ou fonte do evento
             val rootNode = try {
                 rootInActiveWindow ?: event.source
             } catch (e: Exception) {
@@ -173,17 +213,28 @@ class RideScannerAccessibilityService : AccessibilityService() {
                 }
             }
 
+            // 5. Se a janela ativa não tinha textos, tenta event.source diretamente
+            if (allTexts.isEmpty() && event.source != null && event.source != rootNode) {
+                try {
+                    extractAllTexts(event.source, allTexts, depth = 0, maxNodes = 100)
+                } catch (e: Exception) {
+                    Log.d(TAG, "Erro ao extrair nós de event.source: ${e.message}")
+                }
+            }
+
             val fullText = allTexts.joinToString(" ")
             lastEventSnippet = if (fullText.length > 120) fullText.take(120) + "..." else fullText
 
-            // Análise com o parser de OCR
-            val parsedRide = if (allTexts.isNotEmpty()) OcrParser.parseRideText(fullText) else null
+            // Reconhecimento de Pop-up ou Janela de Corrida da 99
+            val detectionResult = detect99Popup(pkgName, event.eventType, fullText, allTexts)
 
-            val parserStatus = when {
-                parsedRide != null -> "✅ OFERTA DETECTADA (R$${parsedRide.price} | ${parsedRide.totalDistanceKm}km | ${parsedRide.totalDurationMin}min)"
-                allTexts.isEmpty() -> "⚠️ Árvore de acessibilidade sem textos legíveis"
-                fullText.contains("R$") || fullText.contains("aceitar", ignoreCase = true) -> "⚠️ Contém R$/Aceitar, mas campos incompletos"
-                else -> "ℹ️ Tela do app monitorado (sem oferta completa)"
+            if (detectionResult.isNewOffer) {
+                detectedPopupsCount++
+                lastDetectedOfferFingerprint = detectionResult.offerFingerprint
+                lastDetectedOfferTimestamp = System.currentTimeMillis()
+                Log.i(TAG, ">>> POP-UP 99 RECONHECIDO (#$detectedPopupsCount): ${detectionResult.summary} | Textos: ${fullText.take(120)}")
+            } else if (detectionResult.isPopup) {
+                Log.d(TAG, "Pop-up 99 já contabilizado (mesma oferta em tela): ${detectionResult.summary}")
             }
 
             // Adiciona no histórico de diagnósticos para a interface
@@ -194,18 +245,19 @@ class RideScannerAccessibilityService : AccessibilityService() {
                 eventTextSnippet = if (allTexts.isNotEmpty()) allTexts.first().take(80) else null,
                 nodeCount = allTexts.size,
                 treeTextSnippet = if (fullText.length > 160) fullText.take(160) + "..." else fullText,
-                parserVerdict = parserStatus,
+                parserVerdict = detectionResult.summary,
                 isTargetApp = true
             )
             addLog(logEntry)
 
-            // Se o Radar estiver desativado pelo usuário na tela Home, não exibe pop-up
+            // Se o Radar estiver desativado pelo usuário na tela Home, não exibe pop-up flutuante
             val isEnabled = if (::prefs.isInitialized) prefs.getBoolean("is_enabled", false) else false
             if (!isEnabled) {
                 return
             }
 
-            // Se nenhuma oferta válida foi encontrada, encerra
+            // Tentativa opcional de OCR caso o overlay flutuante esteja configurado
+            val parsedRide = if (allTexts.isNotEmpty()) OcrParser.parseRideText(fullText) else null
             if (parsedRide == null) return
 
             // Evita popups repetidos para a mesma oferta
@@ -254,6 +306,121 @@ class RideScannerAccessibilityService : AccessibilityService() {
             startService(overlayIntent)
         } catch (t: Throwable) {
             Log.e(TAG, "Falha segura ao processar evento de acessibilidade", t)
+        }
+    }
+
+    private data class PopupDetectionResult(
+        val isPopup: Boolean,
+        val isNewOffer: Boolean,
+        val summary: String,
+        val offerFingerprint: String?
+    )
+
+    private fun detect99Popup(
+        pkgName: String,
+        eventType: Int,
+        fullText: String,
+        texts: Set<String>
+    ): PopupDetectionResult {
+        val lower = fullText.lowercase()
+
+        // 1. Ações explícitas de aceitar ou rejeitar corrida
+        val hasAcceptButton = lower.contains("aceitar") || lower.contains("aceite")
+        val hasDeclineButton = lower.contains("recusar") || lower.contains("rejeitar") || lower.contains("dispensar")
+
+        // 2. Títulos e expressões de chamada de corrida
+        val hasNewRideTitle = lower.contains("nova corrida") || lower.contains("nova viagem") ||
+                lower.contains("nova solicitação") || lower.contains("solicitação de corrida") ||
+                lower.contains("chamada de corrida") || lower.contains("oferta de corrida") ||
+                lower.contains("corrida recebida") || lower.contains("corrida disponível")
+
+        // 3. Categorias típicas da 99
+        val has99Category = lower.contains("99pop") || lower.contains("99 pop") ||
+                lower.contains("99moto") || lower.contains("99 moto") ||
+                lower.contains("99plus") || lower.contains("99 plus") ||
+                lower.contains("99táxi") || lower.contains("99taxi") || lower.contains("99 táxi") ||
+                lower.contains("99negocia") || lower.contains("99 negocia") ||
+                lower.contains("99entrega") || lower.contains("99 entrega") ||
+                lower.contains("99compartilhado") || lower.contains("99 compartilhado")
+
+        // 4. Indicadores de valor e rota
+        val hasPrice = lower.contains("r$") || lower.contains("reais")
+        val hasDistance = lower.contains("km")
+        val hasDuration = lower.contains("min")
+        val hasTripKeywords = lower.contains("passageiro") || lower.contains("embarque") ||
+                lower.contains("destino") || lower.contains("desembarque") || lower.contains("viagem")
+
+        // Avaliação do pop-up
+        val isPopup = when {
+            // Regra 1: Botão explícito de Aceitar presente no app da 99
+            hasAcceptButton -> true
+
+            // Regra 2: Menção explícita a Nova Corrida / Solicitação
+            hasNewRideTitle -> true
+
+            // Regra 3: Categoria 99 (99Pop, 99Moto, etc.) combinada com R$ ou rota (km/min)
+            has99Category && (hasPrice || (hasDistance && hasDuration)) -> true
+
+            // Regra 4: Preço R$ + Distância km + ação ou rota
+            hasPrice && hasDistance && (hasDuration || hasTripKeywords || hasDeclineButton) -> true
+
+            // Regra 5: Notificação de corrida da 99
+            eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED && (hasPrice || hasNewRideTitle || has99Category) -> true
+
+            else -> false
+        }
+
+        if (!isPopup) {
+            val fallback = when {
+                texts.isEmpty() -> "⚠️ Árvore de acessibilidade sem textos legíveis"
+                hasPrice -> "ℹ️ Contém R$, mas sem ação de Aceitar ou Nova Corrida"
+                else -> "📱 App 99 ativo (tela do mapa / sem pop-up de oferta)"
+            }
+            return PopupDetectionResult(
+                isPopup = false,
+                isNewOffer = false,
+                summary = fallback,
+                offerFingerprint = null
+            )
+        }
+
+        // Impressão digital para evitar contar várias vezes o mesmo pop-up
+        val priceMatch = Regex("r\\$\\s*\\d+(?:[.,]\\d+)?", RegexOption.IGNORE_CASE).find(fullText)?.value ?: ""
+        val distMatch = Regex("\\d+(?:[.,]\\d+)?\\s*km", RegexOption.IGNORE_CASE).find(fullText)?.value ?: ""
+        val cleanText = fullText.replace(Regex("\\b\\d{1,2}\\s*s\\b", RegexOption.IGNORE_CASE), "").trim()
+
+        val fingerprint = if (priceMatch.isNotEmpty() || distMatch.isNotEmpty()) {
+            "${priceMatch}_${distMatch}_${has99Category}"
+        } else {
+            cleanText.take(60)
+        }
+
+        val now = System.currentTimeMillis()
+        val isSameRecentOffer = (fingerprint == lastDetectedOfferFingerprint) && (now - lastDetectedOfferTimestamp < 15000L)
+
+        return if (isSameRecentOffer) {
+            PopupDetectionResult(
+                isPopup = true,
+                isNewOffer = false,
+                summary = "🔄 Pop-up 99 ativo (mesma oferta em contagem regressiva)",
+                offerFingerprint = fingerprint
+            )
+        } else {
+            val desc = buildString {
+                append("🎉 NOVO POP-UP 99 RECONHECIDO!")
+                if (priceMatch.isNotEmpty()) append(" ($priceMatch")
+                if (distMatch.isNotEmpty()) {
+                    if (priceMatch.isNotEmpty()) append(" • ") else append(" (")
+                    append(distMatch)
+                }
+                if (priceMatch.isNotEmpty() || distMatch.isNotEmpty()) append(")")
+            }
+            PopupDetectionResult(
+                isPopup = true,
+                isNewOffer = true,
+                summary = desc,
+                offerFingerprint = fingerprint
+            )
         }
     }
 

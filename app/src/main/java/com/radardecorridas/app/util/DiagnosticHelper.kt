@@ -38,7 +38,8 @@ object DiagnosticHelper {
         val totalEventsReceived: Long,
         val totalRawEvents: Long,
         val lastSeenPackage: String?,
-        val recentLogs: List<AccessibilityEventLog>
+        val recentLogs: List<AccessibilityEventLog>,
+        val detectedPopupsCount: Long = 0L
     )
 
     fun checkStatus(context: Context): DiagnosticStatus {
@@ -58,6 +59,7 @@ object DiagnosticHelper {
         val totalRaw = RideScannerAccessibilityService.totalRawEvents
         val lastSeen = RideScannerAccessibilityService.lastSeenPackage
         val recent = RideScannerAccessibilityService.getRecentLogs()
+        val popupsCount = RideScannerAccessibilityService.detectedPopupsCount
 
         return DiagnosticStatus(
             hasOverlayPermission = hasOverlay,
@@ -70,7 +72,8 @@ object DiagnosticHelper {
             totalEventsReceived = totalEvents,
             totalRawEvents = totalRaw,
             lastSeenPackage = lastSeen,
-            recentLogs = recent
+            recentLogs = recent,
+            detectedPopupsCount = popupsCount
         )
     }
 
@@ -89,8 +92,9 @@ object DiagnosticHelper {
             sb.append("Sobreposição (SYSTEM_ALERT_WINDOW): ${if (status.hasOverlayPermission) "OK" else "NEGADA"}\n")
             sb.append("Acessibilidade Habilitada no Android: ${if (status.isAccessibilityEnabledInSystem) "SIM" else "NÃO"}\n")
             sb.append("Serviço Conectado no Processo: ${if (status.isServiceConnected) "SIM" else "NÃO"}\n")
-            sb.append("Total de eventos globais recebidos: ${status.totalRawEvents}\n")
+            sb.append("Corridas/Pop-ups 99 detectadas: ${status.detectedPopupsCount}\n")
             sb.append("Total de eventos de corridas (99/Uber): ${status.totalEventsReceived}\n")
+            sb.append("Total de eventos globais recebidos: ${status.totalRawEvents}\n")
             sb.append("Último pacote detectado: ${status.lastSeenPackage ?: "Nenhum"}\n")
             sb.append("Último pacote de corrida: ${status.lastEventPackage ?: "Nenhum"}\n\n")
 
@@ -171,7 +175,13 @@ object DiagnosticHelper {
 
     fun openOverlaySettings(context: Context) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // Se a permissão já estiver concedida, a etapa está concluída e não solicita novamente
+            if (Settings.canDrawOverlays(context)) {
+                return
+            }
+
             try {
+                // 1. Tenta direcionar diretamente para a página de sobreposição do próprio Radar
                 val intent = Intent(
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     Uri.parse("package:${context.packageName}")
@@ -180,10 +190,33 @@ object DiagnosticHelper {
                 }
                 context.startActivity(intent)
             } catch (_: Exception) {
-                val fallbackIntent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                // 2. Fallback seguro: tela geral de sobreposição de tela do Android
+                try {
+                    val fallbackIntent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(fallbackIntent)
+                } catch (_: Exception) {
+                    // 3. Fallback alternativo: detalhes do aplicativo
+                    try {
+                        val appDetailsIntent = Intent(
+                            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:${context.packageName}")
+                        ).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        context.startActivity(appDetailsIntent)
+                    } catch (_: Exception) {
+                        // 4. Fallback final: configurações gerais do sistema
+                        try {
+                            val generalIntent = Intent(Settings.ACTION_SETTINGS).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            }
+                            context.startActivity(generalIntent)
+                        } catch (_: Exception) {
+                        }
+                    }
                 }
-                context.startActivity(fallbackIntent)
             }
         }
     }
