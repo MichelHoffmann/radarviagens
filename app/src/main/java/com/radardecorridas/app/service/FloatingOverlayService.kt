@@ -249,7 +249,7 @@ class FloatingOverlayService : Service() {
             popupView = inflater.inflate(R.layout.overlay_ride_popup, null)
 
             val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 getOverlayLayoutType(),
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -257,9 +257,9 @@ class FloatingOverlayService : Service() {
                         WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
                 PixelFormat.TRANSLUCENT
             ).apply {
-                gravity = Gravity.TOP or Gravity.START
-                x = 24
-                y = 120
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                x = 0
+                y = 48 // Parte superior da tela, logo abaixo da barra de status
             }
             popupParams = params
 
@@ -275,20 +275,14 @@ class FloatingOverlayService : Service() {
 
         val cardContainer = popupView!!.findViewById<CardView>(R.id.cardContainer)
         val tvVerdictBadge = popupView!!.findViewById<TextView>(R.id.tvVerdictBadge)
-        val tvAppName = popupView!!.findViewById<TextView>(R.id.tvAppName)
-        val tvPrice = popupView!!.findViewById<TextView>(R.id.tvPrice)
         val tvPricePerKm = popupView!!.findViewById<TextView>(R.id.tvPricePerKm)
         val tvPricePerHour = popupView!!.findViewById<TextView>(R.id.tvPricePerHour)
-        val tvTripDetails = popupView!!.findViewById<TextView>(R.id.tvTripDetails)
         val btnClose = popupView!!.findViewById<ImageView>(R.id.btnClose)
 
-        tvAppName.text = appName.uppercase(Locale.getDefault())
-        tvPrice.text = String.format(Locale.getDefault(), "R$ %.2f", price)
-        tvPricePerKm.text = String.format(Locale.getDefault(), "R$ %.2f / km", pricePerKm)
-        tvPricePerHour.text = String.format(Locale.getDefault(), "R$ %.2f / h", pricePerHour)
-        tvTripDetails.text = String.format(Locale.getDefault(), "%.1f km · %d min", totalKm, totalMin)
+        tvPricePerKm.text = String.format(Locale.getDefault(), "R$ %.2f/km", pricePerKm)
+        tvPricePerHour.text = String.format(Locale.getDefault(), "R$ %.2f/h", pricePerHour)
 
-        // Classificação com respectivas cores (Verde, Amarelo, Vermelho)
+        // Classificação estrita com as respectivas cores (Verde, Amarelo, Vermelho)
         when (verdict.uppercase(Locale.getDefault())) {
             "GREEN" -> {
                 cardContainer.setCardBackgroundColor(Color.parseColor("#064E3B")) // Emerald escuro

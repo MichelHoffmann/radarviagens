@@ -34,7 +34,7 @@ export const PhoneSimulator: React.FC<PhoneSimulatorProps> = ({
   onRideAction,
   onOpenSettings,
 }) => {
-  const [overlayPos, setOverlayPos] = useState({ x: 20, y: 110 });
+  const [overlayPos, setOverlayPos] = useState({ x: 14, y: 48 });
   const [isOverlayDismissed, setIsOverlayDismissed] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });

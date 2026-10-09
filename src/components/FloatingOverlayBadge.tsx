@@ -99,56 +99,24 @@ export const FloatingOverlayBadge: React.FC<FloatingOverlayBadgeProps> = ({
         </div>
       </div>
 
-      {/* Conteúdo Principal do Pop-up */}
-      <div className="p-3.5 space-y-3">
-        {/* Cabeçalho com App e Valor Total */}
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-              <span className={`w-2 h-2 rounded-full ${ride.app === 'uber' ? 'bg-black border border-white/40' : 'bg-amber-400'}`}></span>
-              <span>{ride.category}</span>
-              <span className="text-slate-500">·</span>
-              <span className="text-slate-300">{ride.timestamp}</span>
-            </div>
-            <div className="text-2xl font-black text-white tabular-nums tracking-tight mt-0.5">
-              {formatCurrencyBRL(ride.price)}
-            </div>
-          </div>
-
-          <div className="text-right">
-            <div className="text-xs text-slate-300 font-semibold flex items-center gap-1 justify-end">
-              <Navigation className="w-3.5 h-3.5 text-slate-400" />
-              <span>{ride.totalDistanceKm} km</span>
-            </div>
-            <div className="text-xs text-slate-400 flex items-center gap-1 justify-end mt-0.5">
-              <Clock className="w-3.5 h-3.5 text-slate-500" />
-              <span>{ride.totalDurationMin} min</span>
-            </div>
-          </div>
-        </div>
-
+      {/* Conteúdo Principal do Pop-up: apenas R$/km e R$/hora com as cores */}
+      <div className="p-3 space-y-2">
         {/* Indicadores Principais Solicitados: R$/km e R$/hora */}
         <div className="grid grid-cols-2 gap-2">
           {/* Card R$/km */}
           <div
             className={`p-2.5 rounded-xl border ${
               meetsKmRequirement
-                ? 'bg-emerald-950/50 border-emerald-500/40'
-                : 'bg-rose-950/40 border-rose-500/40'
+                ? 'bg-emerald-950/60 border-emerald-500/50'
+                : 'bg-rose-950/50 border-rose-500/50'
             }`}
           >
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-slate-400 font-medium">R$ por KM</span>
-              <span className={`font-bold ${meetsKmRequirement ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {meetsKmRequirement ? '✓ Atende' : '✗ Abaixo'}
-              </span>
+            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+              R$ / KM
             </div>
-            <div className="text-lg font-extrabold text-white tabular-nums mt-0.5">
+            <div className={`text-xl font-black tabular-nums mt-0.5 ${meetsKmRequirement ? 'text-emerald-400' : 'text-rose-400'}`}>
               R$ {pricePerKm.toFixed(2)}
               <span className="text-xs font-normal text-slate-400">/km</span>
-            </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">
-              Meta: R$ {settings.minPricePerKm.toFixed(2)}
             </div>
           </div>
 
@@ -156,97 +124,17 @@ export const FloatingOverlayBadge: React.FC<FloatingOverlayBadgeProps> = ({
           <div
             className={`p-2.5 rounded-xl border ${
               meetsHourRequirement
-                ? 'bg-emerald-950/50 border-emerald-500/40'
-                : 'bg-rose-950/40 border-rose-500/40'
+                ? 'bg-emerald-950/60 border-emerald-500/50'
+                : 'bg-rose-950/50 border-rose-500/50'
             }`}
           >
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-slate-400 font-medium">R$ por Hora</span>
-              <span className={`font-bold ${meetsHourRequirement ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {meetsHourRequirement ? '✓ Atende' : '✗ Abaixo'}
-              </span>
+            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+              R$ / HORA
             </div>
-            <div className="text-lg font-extrabold text-white tabular-nums mt-0.5">
+            <div className={`text-xl font-black tabular-nums mt-0.5 ${meetsHourRequirement ? 'text-emerald-400' : 'text-rose-400'}`}>
               R$ {pricePerHour.toFixed(2)}
               <span className="text-xs font-normal text-slate-400">/h</span>
             </div>
-            <div className="text-[10px] text-slate-400 mt-0.5">
-              Meta: R$ {settings.minPricePerHour.toFixed(2)}
-            </div>
-          </div>
-        </div>
-
-        {/* Motivo do Veredito */}
-        <div className="text-xs text-slate-300 leading-relaxed bg-black/30 p-2.5 rounded-xl border border-white/5">
-          <p className="font-medium text-[11px] text-slate-200">{verdictReason}</p>
-        </div>
-
-        {/* Detalhes Expansíveis de Lucro Líquido e Combustível */}
-        {isExpanded && (
-          <div className="space-y-2 pt-1 border-t border-white/10 text-xs">
-            <div className="flex items-center justify-between text-slate-300">
-              <span className="flex items-center gap-1.5 text-slate-400">
-                <Fuel className="w-3.5 h-3.5 text-amber-400" />
-                Combustível est. ({settings.vehicleConsumptionKmPerLiter} km/l)
-              </span>
-              <span className="font-semibold text-rose-300 tabular-nums">
-                - {formatCurrencyBRL(evaluation.fuelCost)}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between text-slate-300">
-              <span className="flex items-center gap-1.5 text-slate-400">
-                <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
-                Lucro Líquido Real
-              </span>
-              <span className="font-bold text-emerald-400 tabular-nums">
-                {formatCurrencyBRL(netProfit)}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between text-slate-400 text-[11px]">
-              <span>Busca até cliente: {ride.pickupDistanceKm} km ({ride.pickupDurationMin} min)</span>
-              <span>Viagem: {ride.tripDistanceKm} km ({ride.tripDurationMin} min)</span>
-            </div>
-          </div>
-        )}
-
-        {/* Barra Inferior com Controles */}
-        <div className="pt-2 flex items-center justify-between gap-2 border-t border-white/10">
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 py-1"
-          >
-            {isExpanded ? (
-              <>
-                <ChevronUp className="w-3.5 h-3.5" />
-                Menos dados
-              </>
-            ) : (
-              <>
-                <ChevronDown className="w-3.5 h-3.5" />
-                Ver custos & lucro
-              </>
-            )}
-          </button>
-
-          <div className="flex items-center gap-1.5">
-            {onDecline && (
-              <button
-                onClick={onDecline}
-                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-rose-500/20 text-rose-300 border border-rose-500/30 hover:bg-rose-500/30 transition-colors"
-              >
-                Recusar
-              </button>
-            )}
-            {onAccept && (
-              <button
-                onClick={onAccept}
-                className="px-3 py-1 text-xs font-semibold rounded-lg bg-emerald-500 text-emerald-950 hover:bg-emerald-400 transition-colors shadow-md"
-              >
-                Aceitar
-              </button>
-            )}
           </div>
         </div>
       </div>

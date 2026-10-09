@@ -42,7 +42,8 @@ export default function App() {
     return DEFAULT_SETTINGS;
   });
 
-  const [currentRide, setCurrentRide] = useState<RideData>(SAMPLE_RIDES[0]);
+  // Corrida padrão da 99 para simulação
+  const [currentRide, setCurrentRide] = useState<RideData>(SAMPLE_RIDES[1]);
 
   // Histórico de corridas analisadas
   const [history, setHistory] = useState<ScanHistoryItem[]>(() => {
