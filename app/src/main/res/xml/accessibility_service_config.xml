@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/accessibility_service_description"
-    android:accessibilityEventTypes="typeAllMask"
-    android:accessibilityFlags="flagDefault|flagReportViewIds|flagRetrieveInteractiveWindows|flagIncludeNotImportantViews"
+    android:packageNames="com.taxis99.driver,com.taxis99,com.didiglobal.driver,com.didiglobal.motorista,com.didiglobal.passenger,com.didichuxing.driver,com.didichuxing.passenger,com.didi.global.driver,com.didi.brazil.driver,com.xiaojukeji.didi.brazil.driver,com.xiaojukeji.didi.brazil.customer,com.ubercab.driver,com.ubercab,sinet.startup.inDriver,com.indrive"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFlags="flagDefault|flagReportViewIds|flagRetrieveInteractiveWindows"
     android:accessibilityFeedbackType="feedbackGeneric"
-    android:notificationTimeout="50"
+    android:notificationTimeout="100"
     android:canRetrieveWindowContent="true" />
