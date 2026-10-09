@@ -34,6 +34,7 @@ import com.radardecorridas.app.model.RideVerdict
 import com.radardecorridas.app.ui.components.FloatingOverlayBadge
 import com.radardecorridas.app.ui.components.ManualRideTesterCard
 import com.radardecorridas.app.ui.theme.*
+import com.radardecorridas.app.util.DiagnosticHelper
 import com.radardecorridas.app.util.RideCalculator
 import kotlin.math.roundToInt
 
