@@ -548,7 +548,7 @@ fun HomeScreen(
                                         if (!log.eventTextSnippet.isNullOrEmpty()) {
                                             Text(
                                                 text = "Texto do evento: ${log.eventTextSnippet}",
-                                                color = Slate300,
+                                                color = Slate200,
                                                 fontSize = 9.sp,
                                                 fontFamily = FontFamily.Monospace
                                             )
