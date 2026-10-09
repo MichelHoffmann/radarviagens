@@ -17,10 +17,14 @@ data class AccessibilityEventLog(
     val id: Long = System.currentTimeMillis(),
     val timestamp: Long,
     val packageName: String,
+    val className: String? = null,
     val eventType: String,
     val eventTextSnippet: String?,
     val nodeCount: Int,
     val treeTextSnippet: String,
+    val nodeDetails: List<String> = emptyList(),
+    val isTreeAvailable: Boolean = true,
+    val is99App: Boolean = false,
     val parserVerdict: String,
     val isTargetApp: Boolean
 )
@@ -36,6 +40,7 @@ object DiagnosticHelper {
         val lastEventTimestamp: Long,
         val lastEventTextSnippet: String?,
         val totalEventsReceived: Long,
+        val total99Events: Long,
         val totalRawEvents: Long,
         val lastSeenPackage: String?,
         val recentLogs: List<AccessibilityEventLog>,
@@ -56,6 +61,7 @@ object DiagnosticHelper {
         val lastTs = RideScannerAccessibilityService.lastEventTimestamp
         val lastSnippet = RideScannerAccessibilityService.lastEventSnippet
         val totalEvents = RideScannerAccessibilityService.totalEventsReceived
+        val total99 = RideScannerAccessibilityService.total99EventsReceived
         val totalRaw = RideScannerAccessibilityService.totalRawEvents
         val lastSeen = RideScannerAccessibilityService.lastSeenPackage
         val recent = RideScannerAccessibilityService.getRecentLogs()
@@ -70,6 +76,7 @@ object DiagnosticHelper {
             lastEventTimestamp = lastTs,
             lastEventTextSnippet = lastSnippet,
             totalEventsReceived = totalEvents,
+            total99Events = total99,
             totalRawEvents = totalRaw,
             lastSeenPackage = lastSeen,
             recentLogs = recent,
@@ -87,30 +94,35 @@ object DiagnosticHelper {
                 ?: return false
 
             val sb = java.lang.StringBuilder()
-            sb.append("=== DIAGNÓSTICO RADAR DE CORRIDAS ===\n")
+            sb.append("=== DIAGNÓSTICO DE ACESSIBILIDADE RADAR ===\n")
             sb.append("Data/Hora: ${DateFormat.format("yyyy-MM-dd HH:mm:ss", Date())}\n")
             sb.append("Sobreposição (SYSTEM_ALERT_WINDOW): ${if (status.hasOverlayPermission) "OK" else "NEGADA"}\n")
-            sb.append("Acessibilidade Habilitada no Android: ${if (status.isAccessibilityEnabledInSystem) "SIM" else "NÃO"}\n")
-            sb.append("Serviço Conectado no Processo: ${if (status.isServiceConnected) "SIM" else "NÃO"}\n")
-            sb.append("Corridas/Pop-ups 99 detectadas: ${status.detectedPopupsCount}\n")
-            sb.append("Total de eventos de corridas (99/Uber): ${status.totalEventsReceived}\n")
-            sb.append("Total de eventos globais recebidos: ${status.totalRawEvents}\n")
+            sb.append("Acessibilidade Ativa no Android: ${if (status.isAccessibilityEnabledInSystem) "SIM" else "NÃO"}\n")
+            sb.append("Serviço Conectado: ${if (status.isServiceConnected) "SIM" else "NÃO"}\n")
+            sb.append("Total de Eventos Recebidos (OS): ${status.totalRawEvents}\n")
+            sb.append("Total de Eventos da 99: ${status.total99Events}\n")
             sb.append("Último pacote detectado: ${status.lastSeenPackage ?: "Nenhum"}\n")
-            sb.append("Último pacote de corrida: ${status.lastEventPackage ?: "Nenhum"}\n\n")
+            sb.append("Último pacote alvo: ${status.lastEventPackage ?: "Nenhum"}\n\n")
 
-            sb.append("--- LOGS DETALHADOS RECENTES (${status.recentLogs.size}) ---\n")
+            sb.append("--- REGISTROS DE EVENTOS (${status.recentLogs.size}) ---\n")
             if (status.recentLogs.isEmpty()) {
-                sb.append("Nenhum log registrado ainda.\n")
+                sb.append("Nenhum evento registrado ainda.\n")
             } else {
                 status.recentLogs.forEachIndexed { idx, log ->
                     val timeStr = DateFormat.format("HH:mm:ss", Date(log.timestamp))
-                    sb.append("[#${idx + 1}] $timeStr | Pkg: ${log.packageName} | Tipo: ${log.eventType}\n")
+                    sb.append("[#${idx + 1}] $timeStr | Pkg: ${log.packageName} | Class: ${log.className ?: "N/D"} | Tipo: ${log.eventType}\n")
+                    sb.append("    É da 99? ${if (log.is99App) "SIM" else "NÃO"}\n")
                     if (!log.eventTextSnippet.isNullOrBlank()) {
                         sb.append("    EventText: ${log.eventTextSnippet}\n")
                     }
-                    sb.append("    Nós lidos: ${log.nodeCount} nós\n")
-                    sb.append("    Trecho da árvore: ${log.treeTextSnippet}\n")
-                    sb.append("    Status Parser: ${log.parserVerdict}\n\n")
+                    sb.append("    Árvore disponível: ${if (log.isTreeAvailable) "SIM (${log.nodeCount} textos)" else "NÃO/INDISPONÍVEL"}\n")
+                    if (log.treeTextSnippet.isNotBlank()) {
+                        sb.append("    Textos da árvore: ${log.treeTextSnippet}\n")
+                    }
+                    if (log.nodeDetails.isNotEmpty()) {
+                        sb.append("    Elementos / IDs: ${log.nodeDetails.take(5).joinToString(" | ")}\n")
+                    }
+                    sb.append("    Diagnóstico: ${log.parserVerdict}\n\n")
                 }
             }
 

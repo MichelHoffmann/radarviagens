@@ -287,7 +287,7 @@ fun HomeScreen(
                     onAction = { DiagnosticHelper.openAccessibilitySettings(context) }
                 )
 
-                // Item 4: Monitoramento 99 / Uber (Diagnóstico em Tempo Real)
+                // Item 4: Diagnóstico de Acessibilidade em Tempo Real (99 / Todos os Apps)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -304,29 +304,26 @@ fun HomeScreen(
                     ) {
                         Column {
                             Text(
-                                text = "Monitoramento 99 / Uber",
+                                text = "Diagnóstico de Acessibilidade",
                                 color = White,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Pipeline de Captura e Diagnóstico",
+                                text = "Eventos em tempo real da 99 e do sistema",
                                 color = Slate400,
                                 fontSize = 10.sp
                             )
                         }
                         Text(
-                            text = if (diagStatus.detectedPopupsCount > 0)
-                                "${diagStatus.detectedPopupsCount} corridas detectadas (${diagStatus.totalEventsReceived} eventos)"
-                            else
-                                "${diagStatus.totalEventsReceived} eventos 99",
-                            color = if (diagStatus.detectedPopupsCount > 0) Emerald400 else if (diagStatus.totalEventsReceived > 0) Cyan400 else Amber400,
+                            text = if (diagStatus.isServiceConnected) "● CONECTADO" else "○ DESCONECTADO",
+                            color = if (diagStatus.isServiceConnected) Emerald400 else Rose400,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Black
                         )
                     }
 
-                    // Status dos contadores globais e pacote ativo
+                    // Status dos contadores globais e da 99
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -336,23 +333,39 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "Pop-ups 99: ${diagStatus.detectedPopupsCount}",
-                            color = if (diagStatus.detectedPopupsCount > 0) Emerald400 else Slate200,
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
-                        )
-                        Text(
-                            text = "Último app: ${diagStatus.lastSeenPackage?.substringAfterLast('.') ?: "nenhum"}",
-                            color = Cyan400,
-                            fontSize = 10.sp,
-                            fontFamily = FontFamily.Monospace
-                        )
+                        Column {
+                            Text("Eventos do OS", color = Slate400, fontSize = 9.sp)
+                            Text(
+                                text = "${diagStatus.totalRawEvents}",
+                                color = White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Eventos da 99", color = Slate400, fontSize = 9.sp)
+                            Text(
+                                text = "${diagStatus.total99Events}",
+                                color = if (diagStatus.total99Events > 0) Emerald400 else Amber400,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Último App", color = Slate400, fontSize = 9.sp)
+                            Text(
+                                text = diagStatus.lastSeenPackage?.substringAfterLast('.') ?: "nenhum",
+                                color = Cyan400,
+                                fontSize = 11.sp,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
                     }
 
-                    if (diagStatus.lastEventPackage != null && diagStatus.lastEventTimestamp > 0) {
-                        val formattedTime = DateFormat.format("HH:mm:ss", Date(diagStatus.lastEventTimestamp)).toString()
+                    if (diagStatus.lastSeenPackage != null) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -362,33 +375,28 @@ fun HomeScreen(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text(
-                                text = "Último evento de corrida: às $formattedTime",
-                                color = Emerald400,
-                                fontSize = 11.sp,
+                                text = "Último pacote detectado: ${diagStatus.lastSeenPackage}",
+                                color = Cyan400,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace,
                                 fontWeight = FontWeight.Bold
                             )
-                            Text(
-                                text = "Pacote: ${diagStatus.lastEventPackage}",
-                                color = Slate200,
-                                fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace
-                            )
-                            if (!diagStatus.lastEventTextSnippet.isNullOrEmpty()) {
+                            if (diagStatus.lastEventPackage != null && diagStatus.lastEventTimestamp > 0) {
+                                val formattedTime = DateFormat.format("HH:mm:ss", Date(diagStatus.lastEventTimestamp)).toString()
                                 Text(
-                                    text = "Texto: \"${diagStatus.lastEventTextSnippet}\"",
-                                    color = Slate400,
+                                    text = "Último app de transporte monitorado: ${diagStatus.lastEventPackage} às $formattedTime",
+                                    color = Emerald400,
                                     fontSize = 10.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    maxLines = 3
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
                     } else {
                         Text(
-                            text = if (diagStatus.totalRawEvents > 0)
-                                "Acessibilidade ativa recebendo eventos do sistema (${diagStatus.totalRawEvents} globais). Abra o app da 99 para capturar ofertas."
+                            text = if (diagStatus.isServiceConnected)
+                                "Acessibilidade conectada aguardando eventos. Alterne para a 99 ou outro app."
                             else
-                                "Aguardando primeiro evento do Android. Verifique se a Acessibilidade está ligada.",
+                                "Serviço não conectado. Verifique o item 2 e 3 acima.",
                             color = Slate400,
                             fontSize = 11.sp
                         )
@@ -410,7 +418,7 @@ fun HomeScreen(
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text(
-                                text = if (showLogsExpanded) "Ocultar Logs (${diagStatus.recentLogs.size})" else "Ver Logs Detalhados (${diagStatus.recentLogs.size})",
+                                text = if (showLogsExpanded) "Ocultar Registros (${diagStatus.recentLogs.size})" else "Ver Registros Detalhados (${diagStatus.recentLogs.size})",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -463,28 +471,43 @@ fun HomeScreen(
                                 .padding(10.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Text(
-                                text = "LOGS DETALHADOS EM TEMPO REAL",
-                                color = Cyan400,
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Black
-                            )
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "LOGS DETALHADOS EM TEMPO REAL",
+                                    color = Cyan400,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Black
+                                )
+                                Text(
+                                    text = "Limite: 50",
+                                    color = Slate400,
+                                    fontSize = 9.sp
+                                )
+                            }
 
                             if (diagStatus.recentLogs.isEmpty()) {
                                 Text(
-                                    text = "Nenhum evento de corrida registrado ainda. Abra a 99.",
+                                    text = "Nenhum evento registrado ainda. Abra qualquer app ou a 99.",
                                     color = Slate400,
                                     fontSize = 10.sp
                                 )
                             } else {
-                                diagStatus.recentLogs.takeLast(10).reversed().forEachIndexed { index, log ->
+                                diagStatus.recentLogs.takeLast(12).reversed().forEachIndexed { index, log ->
                                     val timeStr = DateFormat.format("HH:mm:ss", Date(log.timestamp)).toString()
                                     Column(
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(8.dp))
-                                            .background(Slate950)
-                                            .border(0.5.dp, Slate800, RoundedCornerShape(8.dp))
+                                            .background(if (log.is99App) Emerald950.copy(alpha = 0.4f) else Slate950)
+                                            .border(
+                                                width = 0.5.dp,
+                                                color = if (log.is99App) Emerald500.copy(alpha = 0.6f) else Slate800,
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
                                             .padding(8.dp),
                                         verticalArrangement = Arrangement.spacedBy(3.dp)
                                     ) {
@@ -494,43 +517,64 @@ fun HomeScreen(
                                         ) {
                                             Text(
                                                 text = "#${diagStatus.recentLogs.size - index} $timeStr [${log.eventType}]",
-                                                color = White,
+                                                color = if (log.is99App) Emerald400 else White,
                                                 fontSize = 10.sp,
                                                 fontWeight = FontWeight.Bold
                                             )
                                             Text(
-                                                text = "${log.nodeCount} nós",
-                                                color = Cyan400,
-                                                fontSize = 9.sp
+                                                text = if (log.is99App) "🎯 APP 99" else if (log.isTreeAvailable) "${log.nodeCount} textos" else "Árvore n/d",
+                                                color = if (log.is99App) Emerald400 else if (log.isTreeAvailable) Cyan400 else Rose400,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold
                                             )
                                         }
+
                                         Text(
                                             text = "Pacote: ${log.packageName}",
                                             color = Slate200,
                                             fontSize = 9.sp,
                                             fontFamily = FontFamily.Monospace
                                         )
-                                        if (!log.eventTextSnippet.isNullOrEmpty()) {
+
+                                        if (!log.className.isNullOrBlank()) {
                                             Text(
-                                                text = "EventText: ${log.eventTextSnippet}",
+                                                text = "Classe: ${log.className}",
                                                 color = Slate400,
                                                 fontSize = 9.sp,
                                                 fontFamily = FontFamily.Monospace
                                             )
                                         }
+
+                                        if (!log.eventTextSnippet.isNullOrEmpty()) {
+                                            Text(
+                                                text = "Texto do evento: ${log.eventTextSnippet}",
+                                                color = Slate300,
+                                                fontSize = 9.sp,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                        }
+
                                         Text(
-                                            text = "Árvore: \"${log.treeTextSnippet}\"",
-                                            color = Slate400,
+                                            text = if (log.isTreeAvailable) "Árvore: \"${log.treeTextSnippet}\"" else "Árvore: ❌ Não disponível no momento do evento",
+                                            color = if (log.isTreeAvailable) Slate400 else Rose400,
                                             fontSize = 9.sp,
                                             fontFamily = FontFamily.Monospace,
                                             maxLines = 3
                                         )
+
+                                        if (log.nodeDetails.isNotEmpty()) {
+                                            Text(
+                                                text = "Elementos/IDs: " + log.nodeDetails.take(4).joinToString(" • "),
+                                                color = Cyan400,
+                                                fontSize = 8.sp,
+                                                fontFamily = FontFamily.Monospace,
+                                                maxLines = 2
+                                            )
+                                        }
+
                                         Text(
-                                            text = "Status: ${log.parserVerdict}",
-                                            color = if (log.parserVerdict.startsWith("🎉") || log.parserVerdict.startsWith("✅")) Emerald400
-                                                else if (log.parserVerdict.startsWith("🔄")) Cyan400
-                                                else if (log.parserVerdict.startsWith("⚠️")) Amber400
-                                                else Slate400,
+                                            text = log.parserVerdict,
+                                            color = if (log.is99App) Emerald400 else Slate400,
                                             fontSize = 9.sp,
                                             fontWeight = FontWeight.SemiBold
                                         )

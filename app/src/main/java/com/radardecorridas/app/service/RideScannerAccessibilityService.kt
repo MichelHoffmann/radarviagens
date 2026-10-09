@@ -67,6 +67,10 @@ class RideScannerAccessibilityService : AccessibilityService() {
             private set
 
         @Volatile
+        var total99EventsReceived: Long = 0L
+            private set
+
+        @Volatile
         var totalRawEvents: Long = 0L
             private set
 
@@ -99,24 +103,32 @@ class RideScannerAccessibilityService : AccessibilityService() {
                 _eventLogs.clear()
             }
             detectedPopupsCount = 0L
+            total99EventsReceived = 0L
+            totalRawEvents = 0L
+            totalEventsReceived = 0L
             lastDetectedOfferFingerprint = null
             lastDetectedOfferTimestamp = 0L
         }
 
         fun addLog(log: AccessibilityEventLog) {
             synchronized(_eventLogs) {
-                if (_eventLogs.size >= 30) {
+                if (_eventLogs.size >= 50) {
                     _eventLogs.removeFirst()
                 }
                 _eventLogs.add(log)
             }
         }
 
-        fun isTargetPackage(pkg: String): Boolean {
+        fun is99Package(pkg: String): Boolean {
             val lower = pkg.lowercase()
             return lower.contains("99") ||
                     lower.contains("didi") ||
-                    lower.contains("xiaojukeji") ||
+                    lower.contains("xiaojukeji")
+        }
+
+        fun isTargetPackage(pkg: String): Boolean {
+            val lower = pkg.lowercase()
+            return is99Package(lower) ||
                     lower.contains("uber") ||
                     lower.contains("indriver") ||
                     lower.contains("indrive")
@@ -154,35 +166,42 @@ class RideScannerAccessibilityService : AccessibilityService() {
         if (event == null) return
 
         try {
-            val pkgName = (event.packageName ?: event.source?.packageName)?.toString() ?: return
+            val pkgName = (event.packageName ?: event.source?.packageName)?.toString() ?: "desconhecido"
+            val className = (event.className ?: event.source?.className)?.toString()
 
-            // Verifica se é aplicativo alvo monitorado
-            if (!isTargetPackage(pkgName)) return
-
-            // Registra telemetria de diagnóstico em tempo real
+            // 1. Registra todo e qualquer evento do Android para diagnóstico em tempo real
             totalRawEvents++
-            totalEventsReceived++
             lastSeenPackage = pkgName
-            lastEventPackage = pkgName
-            lastEventTimestamp = System.currentTimeMillis()
+
+            val is99 = is99Package(pkgName)
+            val isTarget = isTargetPackage(pkgName)
+            if (is99) {
+                total99EventsReceived++
+            }
+            if (isTarget) {
+                totalEventsReceived++
+                lastEventPackage = pkgName
+                lastEventTimestamp = System.currentTimeMillis()
+            }
 
             val eventTypeName = formatEventType(event.eventType)
 
-            // Coleta textos do evento e da hierarquia da janela
+            // 2. Coleta textos e nós da janela
             val allTexts = LinkedHashSet<String>()
+            val nodeDetails = mutableListOf<String>()
+            var isTreeAvailable = false
 
-            // 1. Textos diretos da notificação ou do evento
+            // Textos diretos da notificação ou evento
             event.text?.forEach { charSeq ->
                 val str = charSeq?.toString()?.trim()
                 if (!str.isNullOrEmpty()) allTexts.add(str)
             }
 
-            // 2. Descrição de conteúdo do próprio evento
             event.contentDescription?.toString()?.trim()?.let {
                 if (it.isNotEmpty()) allTexts.add(it)
             }
 
-            // 3. Registros adicionais do evento (AccessibilityRecord)
+            // AccessibilityRecords
             for (i in 0 until event.recordCount) {
                 try {
                     val record = event.getRecord(i) ?: continue
@@ -193,266 +212,114 @@ class RideScannerAccessibilityService : AccessibilityService() {
                     record.contentDescription?.toString()?.trim()?.let {
                         if (it.isNotEmpty()) allTexts.add(it)
                     }
-                } catch (e: Exception) {
-                    // Ignora falha de record específico
+                } catch (_: Exception) {
                 }
             }
 
-            // 4. Nós da janela ativa ou fonte do evento
+            // Tenta obter a árvore da janela ativa ou event.source
             val rootNode = try {
                 rootInActiveWindow ?: event.source
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 event.source
             }
 
             if (rootNode != null) {
+                isTreeAvailable = true
                 try {
-                    extractAllTexts(rootNode, allTexts, depth = 0, maxNodes = 100)
+                    extractTreeDetails(rootNode, allTexts, nodeDetails, depth = 0, maxNodes = 60)
                 } catch (e: Exception) {
-                    Log.d(TAG, "Erro ao extrair nós: ${e.message}")
+                    Log.d(TAG, "Erro ao extrair nós de rootNode: ${e.message}")
                 }
-            }
-
-            // 5. Se a janela ativa não tinha textos, tenta event.source diretamente
-            if (allTexts.isEmpty() && event.source != null && event.source != rootNode) {
+            } else if (event.source != null) {
+                isTreeAvailable = true
                 try {
-                    extractAllTexts(event.source, allTexts, depth = 0, maxNodes = 100)
+                    extractTreeDetails(event.source, allTexts, nodeDetails, depth = 0, maxNodes = 60)
                 } catch (e: Exception) {
                     Log.d(TAG, "Erro ao extrair nós de event.source: ${e.message}")
                 }
             }
 
             val fullText = allTexts.joinToString(" ")
-            lastEventSnippet = if (fullText.length > 120) fullText.take(120) + "..." else fullText
-
-            // Reconhecimento de Pop-up ou Janela de Corrida da 99
-            val detectionResult = detect99Popup(pkgName, event.eventType, fullText, allTexts)
-
-            if (detectionResult.isNewOffer) {
-                detectedPopupsCount++
-                lastDetectedOfferFingerprint = detectionResult.offerFingerprint
-                lastDetectedOfferTimestamp = System.currentTimeMillis()
-                Log.i(TAG, ">>> POP-UP 99 RECONHECIDO (#$detectedPopupsCount): ${detectionResult.summary} | Textos: ${fullText.take(120)}")
-            } else if (detectionResult.isPopup) {
-                Log.d(TAG, "Pop-up 99 já contabilizado (mesma oferta em tela): ${detectionResult.summary}")
+            if (isTarget) {
+                lastEventSnippet = if (fullText.length > 120) fullText.take(120) + "..." else fullText
             }
 
-            // Adiciona no histórico de diagnósticos para a interface
+            // 3. Monta veredito puramente diagnóstico sem alterar contadores nem simular
+            val verdict = when {
+                is99 && !isTreeAvailable -> "⚠️ Evento 99 recebido, mas árvore da janela está INDISPONÍVEL"
+                is99 && allTexts.isEmpty() -> "⚠️ Evento 99 recebido, porém árvore está VAZIA (sem nós de texto)"
+                is99 -> "✅ Evento 99 recebido com ${allTexts.size} textos (${nodeDetails.size} elementos mapeados)"
+                isTarget -> "ℹ️ Evento de app monitorado ($pkgName) com ${allTexts.size} textos"
+                else -> "📱 Evento do sistema ($pkgName)"
+            }
+
+            // 4. Cria entrada diagnóstica completa
             val logEntry = AccessibilityEventLog(
                 timestamp = System.currentTimeMillis(),
                 packageName = pkgName,
+                className = className,
                 eventType = eventTypeName,
-                eventTextSnippet = if (allTexts.isNotEmpty()) allTexts.first().take(80) else null,
+                eventTextSnippet = if (allTexts.isNotEmpty()) allTexts.first().take(80) else event.text?.firstOrNull()?.toString()?.take(80),
                 nodeCount = allTexts.size,
-                treeTextSnippet = if (fullText.length > 160) fullText.take(160) + "..." else fullText,
-                parserVerdict = detectionResult.summary,
-                isTargetApp = true
+                treeTextSnippet = if (fullText.length > 160) fullText.take(160) + "..." else if (fullText.isNotBlank()) fullText else if (!isTreeAvailable) "[Árvore indisponível]" else "[Árvore vazia]",
+                nodeDetails = nodeDetails,
+                isTreeAvailable = isTreeAvailable,
+                is99App = is99,
+                parserVerdict = verdict,
+                isTargetApp = isTarget
             )
             addLog(logEntry)
 
-            // Se o Radar estiver desativado pelo usuário na tela Home, não exibe pop-up flutuante
-            val isEnabled = if (::prefs.isInitialized) prefs.getBoolean("is_enabled", false) else false
-            if (!isEnabled) {
-                return
-            }
-
-            // Tentativa opcional de OCR caso o overlay flutuante esteja configurado
-            val parsedRide = if (allTexts.isNotEmpty()) OcrParser.parseRideText(fullText) else null
-            if (parsedRide == null) return
-
-            // Evita popups repetidos para a mesma oferta
-            val currentHash = "${parsedRide.price}_${parsedRide.totalDistanceKm}_${parsedRide.totalDurationMin}".hashCode()
-            val now = System.currentTimeMillis()
-            if (currentHash == lastScannedHash && now - lastScanTimestamp < 8000) {
-                return
-            }
-            lastScannedHash = currentHash
-            lastScanTimestamp = now
-
-            // Lê metas configuradas
-            val minKm = prefs.getFloat("min_price_per_km", 2.00f).toDouble()
-            val minHour = prefs.getFloat("min_price_per_hour", 35.00f).toDouble()
-            val fuelPrice = prefs.getFloat("fuel_price", 5.85f).toDouble()
-            val consumption = prefs.getFloat("vehicle_consumption", 11.5f).toDouble()
-
-            val settings = DriverSettings(
-                isEnabled = true,
-                minPricePerKm = minKm,
-                minPricePerHour = minHour,
-                fuelPricePerLiter = fuelPrice,
-                vehicleConsumptionKmPerLiter = consumption
-            )
-
-            val evaluation = RideCalculator.evaluateRide(parsedRide, settings)
-
-            val appLabel = when {
-                pkgName.contains("uber", ignoreCase = true) -> "Uber"
-                pkgName.contains("99", ignoreCase = true) || pkgName.contains("didi", ignoreCase = true) -> "99"
-                pkgName.contains("indrive", ignoreCase = true) -> "inDrive"
-                else -> parsedRide.app.replaceFirstChar { it.uppercase() }
-            }
-
-            // Dispara popup flutuante
-            val overlayIntent = Intent(this, FloatingOverlayService::class.java).apply {
-                action = FloatingOverlayService.ACTION_SHOW_POPUP
-                putExtra("APP_NAME", appLabel)
-                putExtra("PRICE", evaluation.ride.price)
-                putExtra("TOTAL_KM", evaluation.ride.totalDistanceKm)
-                putExtra("TOTAL_MIN", evaluation.ride.totalDurationMin)
-                putExtra("PRICE_PER_KM", evaluation.pricePerKm)
-                putExtra("PRICE_PER_HOUR", evaluation.pricePerHour)
-                putExtra("VERDICT", evaluation.verdict.name)
-            }
-            startService(overlayIntent)
+            Log.d(TAG, "Diagnóstico: [$eventTypeName] pkg=$pkgName class=$className textos=${allTexts.size} tree=$isTreeAvailable")
         } catch (t: Throwable) {
-            Log.e(TAG, "Falha segura ao processar evento de acessibilidade", t)
+            Log.e(TAG, "Falha segura ao registrar diagnóstico de acessibilidade", t)
         }
     }
 
-    private data class PopupDetectionResult(
-        val isPopup: Boolean,
-        val isNewOffer: Boolean,
-        val summary: String,
-        val offerFingerprint: String?
-    )
-
-    private fun detect99Popup(
-        pkgName: String,
-        eventType: Int,
-        fullText: String,
-        texts: Set<String>
-    ): PopupDetectionResult {
-        val lower = fullText.lowercase()
-
-        // 1. Ações explícitas de aceitar ou rejeitar corrida
-        val hasAcceptButton = lower.contains("aceitar") || lower.contains("aceite")
-        val hasDeclineButton = lower.contains("recusar") || lower.contains("rejeitar") || lower.contains("dispensar")
-
-        // 2. Títulos e expressões de chamada de corrida
-        val hasNewRideTitle = lower.contains("nova corrida") || lower.contains("nova viagem") ||
-                lower.contains("nova solicitação") || lower.contains("solicitação de corrida") ||
-                lower.contains("chamada de corrida") || lower.contains("oferta de corrida") ||
-                lower.contains("corrida recebida") || lower.contains("corrida disponível")
-
-        // 3. Categorias típicas da 99
-        val has99Category = lower.contains("99pop") || lower.contains("99 pop") ||
-                lower.contains("99moto") || lower.contains("99 moto") ||
-                lower.contains("99plus") || lower.contains("99 plus") ||
-                lower.contains("99táxi") || lower.contains("99taxi") || lower.contains("99 táxi") ||
-                lower.contains("99negocia") || lower.contains("99 negocia") ||
-                lower.contains("99entrega") || lower.contains("99 entrega") ||
-                lower.contains("99compartilhado") || lower.contains("99 compartilhado")
-
-        // 4. Indicadores de valor e rota
-        val hasPrice = lower.contains("r$") || lower.contains("reais")
-        val hasDistance = lower.contains("km")
-        val hasDuration = lower.contains("min")
-        val hasTripKeywords = lower.contains("passageiro") || lower.contains("embarque") ||
-                lower.contains("destino") || lower.contains("desembarque") || lower.contains("viagem")
-
-        // Avaliação do pop-up
-        val isPopup = when {
-            // Regra 1: Botão explícito de Aceitar presente no app da 99
-            hasAcceptButton -> true
-
-            // Regra 2: Menção explícita a Nova Corrida / Solicitação
-            hasNewRideTitle -> true
-
-            // Regra 3: Categoria 99 (99Pop, 99Moto, etc.) combinada com R$ ou rota (km/min)
-            has99Category && (hasPrice || (hasDistance && hasDuration)) -> true
-
-            // Regra 4: Preço R$ + Distância km + ação ou rota
-            hasPrice && hasDistance && (hasDuration || hasTripKeywords || hasDeclineButton) -> true
-
-            // Regra 5: Notificação de corrida da 99
-            eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED && (hasPrice || hasNewRideTitle || has99Category) -> true
-
-            else -> false
-        }
-
-        if (!isPopup) {
-            val fallback = when {
-                texts.isEmpty() -> "⚠️ Árvore de acessibilidade sem textos legíveis"
-                hasPrice -> "ℹ️ Contém R$, mas sem ação de Aceitar ou Nova Corrida"
-                else -> "📱 App 99 ativo (tela do mapa / sem pop-up de oferta)"
-            }
-            return PopupDetectionResult(
-                isPopup = false,
-                isNewOffer = false,
-                summary = fallback,
-                offerFingerprint = null
-            )
-        }
-
-        // Impressão digital para evitar contar várias vezes o mesmo pop-up
-        val priceMatch = Regex("r\\$\\s*\\d+(?:[.,]\\d+)?", RegexOption.IGNORE_CASE).find(fullText)?.value ?: ""
-        val distMatch = Regex("\\d+(?:[.,]\\d+)?\\s*km", RegexOption.IGNORE_CASE).find(fullText)?.value ?: ""
-        val cleanText = fullText.replace(Regex("\\b\\d{1,2}\\s*s\\b", RegexOption.IGNORE_CASE), "").trim()
-
-        val fingerprint = if (priceMatch.isNotEmpty() || distMatch.isNotEmpty()) {
-            "${priceMatch}_${distMatch}_${has99Category}"
-        } else {
-            cleanText.take(60)
-        }
-
-        val now = System.currentTimeMillis()
-        val isSameRecentOffer = (fingerprint == lastDetectedOfferFingerprint) && (now - lastDetectedOfferTimestamp < 15000L)
-
-        return if (isSameRecentOffer) {
-            PopupDetectionResult(
-                isPopup = true,
-                isNewOffer = false,
-                summary = "🔄 Pop-up 99 ativo (mesma oferta em contagem regressiva)",
-                offerFingerprint = fingerprint
-            )
-        } else {
-            val desc = buildString {
-                append("🎉 NOVO POP-UP 99 RECONHECIDO!")
-                if (priceMatch.isNotEmpty()) append(" ($priceMatch")
-                if (distMatch.isNotEmpty()) {
-                    if (priceMatch.isNotEmpty()) append(" • ") else append(" (")
-                    append(distMatch)
-                }
-                if (priceMatch.isNotEmpty() || distMatch.isNotEmpty()) append(")")
-            }
-            PopupDetectionResult(
-                isPopup = true,
-                isNewOffer = true,
-                summary = desc,
-                offerFingerprint = fingerprint
-            )
-        }
-    }
-
-    private fun extractAllTexts(
+    private fun extractTreeDetails(
         node: AccessibilityNodeInfo?,
         texts: MutableSet<String>,
+        details: MutableList<String>,
         depth: Int = 0,
-        maxNodes: Int = 100
+        maxNodes: Int = 60
     ) {
-        if (node == null || depth > 15 || texts.size >= maxNodes) return
+        if (node == null || depth > 12 || texts.size >= maxNodes) return
 
         try {
-            node.text?.toString()?.trim()?.let {
-                if (it.isNotEmpty()) texts.add(it)
+            val nodeText = node.text?.toString()?.trim()
+            val desc = node.contentDescription?.toString()?.trim()
+            val viewId = node.viewIdResourceName?.substringAfterLast('/')
+
+            if (!nodeText.isNullOrEmpty()) {
+                texts.add(nodeText)
+                if (details.size < 15) {
+                    val idPart = if (!viewId.isNullOrEmpty()) " [id: $viewId]" else ""
+                    details.add("\"$nodeText\"$idPart")
+                }
+            } else if (!desc.isNullOrEmpty()) {
+                texts.add(desc)
+                if (details.size < 15) {
+                    val idPart = if (!viewId.isNullOrEmpty()) " [id: $viewId]" else ""
+                    details.add("\"$desc\"$idPart (desc)")
+                }
+            } else if (!viewId.isNullOrEmpty() && details.size < 15) {
+                details.add("[id: $viewId] (sem texto)")
             }
-            node.contentDescription?.toString()?.trim()?.let {
-                if (it.isNotEmpty()) texts.add(it)
-            }
+
             val childCount = node.childCount
             for (i in 0 until childCount) {
                 if (texts.size >= maxNodes) break
                 val child = try {
                     node.getChild(i)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     null
                 }
                 if (child != null) {
-                    extractAllTexts(child, texts, depth + 1, maxNodes)
+                    extractTreeDetails(child, texts, details, depth + 1, maxNodes)
                 }
             }
         } catch (e: Exception) {
-            Log.d(TAG, "Erro em extractAllTexts: ${e.message}")
+            Log.d(TAG, "Erro em extractTreeDetails: ${e.message}")
         }
     }
 
