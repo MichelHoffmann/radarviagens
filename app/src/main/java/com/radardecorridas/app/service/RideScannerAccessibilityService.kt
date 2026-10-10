@@ -24,21 +24,13 @@ class RideScannerAccessibilityService : AccessibilityService() {
         private const val TAG = "RideScannerService"
 
         val SUPPORTED_PACKAGES = arrayOf(
+            "com.app99.driver",
             "com.taxis99.driver",
-            "com.taxis99",
             "com.didiglobal.driver",
             "com.didiglobal.motorista",
-            "com.didiglobal.passenger",
-            "com.didichuxing.driver",
-            "com.didichuxing.passenger",
             "com.didi.global.driver",
             "com.didi.brazil.driver",
             "com.xiaojukeji.didi.brazil.driver",
-            "com.xiaojukeji.didi.brazil.customer",
-            "com.sdu.didi.gui",
-            "com.sdu.didi.gsui",
-            "com.didi.passenger",
-            "com.didiglobal.customer",
             "com.ubercab.driver",
             "com.ubercab",
             "sinet.startup.inDriver",
@@ -121,9 +113,11 @@ class RideScannerAccessibilityService : AccessibilityService() {
 
         fun is99Package(pkg: String): Boolean {
             val lower = pkg.lowercase()
-            return lower.contains("99") ||
-                    lower.contains("didi") ||
-                    lower.contains("xiaojukeji")
+            if (lower == "com.taxis99") return false // App de passageiro
+            return lower == "com.app99.driver" ||
+                    lower == "com.taxis99.driver" ||
+                    lower.contains("driver") && (lower.contains("99") || lower.contains("didi") || lower.contains("xiaojukeji")) ||
+                    lower.contains("motorista") && (lower.contains("99") || lower.contains("didi"))
         }
 
         fun isTargetPackage(pkg: String): Boolean {
@@ -168,6 +162,15 @@ class RideScannerAccessibilityService : AccessibilityService() {
         try {
             val pkgName = (event.packageName ?: event.source?.packageName)?.toString() ?: "desconhecido"
             val className = (event.className ?: event.source?.className)?.toString()
+            val eventTypeName = formatEventType(event.eventType)
+
+            // Log de diagnóstico temporário conforme solicitado pelo usuário
+            Log.d("GIGU_DEBUG", "Evento recebido: eventType=$eventTypeName (${event.eventType}), packageName=$pkgName, className=$className")
+
+            // Se for com.app99.driver, despeja a árvore completa de nós no Logcat
+            if (pkgName == "com.app99.driver") {
+                dumpApp99WindowsAndNodes(event)
+            }
 
             // 1. Registra todo e qualquer evento do Android para diagnóstico em tempo real
             totalRawEvents++
@@ -183,8 +186,6 @@ class RideScannerAccessibilityService : AccessibilityService() {
                 lastEventPackage = pkgName
                 lastEventTimestamp = System.currentTimeMillis()
             }
-
-            val eventTypeName = formatEventType(event.eventType)
 
             // 2. Coleta textos e nós da janela
             val allTexts = LinkedHashSet<String>()
@@ -382,6 +383,109 @@ class RideScannerAccessibilityService : AccessibilityService() {
             }
         } catch (e: Exception) {
             Log.d(TAG, "Erro em extractTreeDetails: ${e.message}")
+        }
+    }
+
+    /**
+     * Despeja no Logcat (tag "GIGU_DEBUG") a árvore completa de nós da tela da 99:
+     * text, contentDescription, className e viewIdResourceName,
+     * percorrendo rootInActiveWindow e cada janela retornada por windows (getWindows).
+     */
+    private fun dumpApp99WindowsAndNodes(event: AccessibilityEvent) {
+        Log.d("GIGU_DEBUG", "========== INÍCIO DUMP ÁRVORE COMPLETA 99 (com.app99.driver) ==========")
+
+        // 1. Despeja nó raiz da janela ativa (rootInActiveWindow)
+        val activeRoot = try {
+            rootInActiveWindow
+        } catch (e: Exception) {
+            Log.w("GIGU_DEBUG", "Erro ao obter rootInActiveWindow: ${e.message}")
+            null
+        }
+
+        if (activeRoot != null) {
+            Log.d("GIGU_DEBUG", "--- [Janela Ativa: rootInActiveWindow] ---")
+            dumpNodeRecursive(activeRoot, depth = 0, origin = "rootInActiveWindow")
+        } else {
+            Log.d("GIGU_DEBUG", "--- rootInActiveWindow retornou nulo ---")
+        }
+
+        // 2. Despeja o nó fonte direto do evento (event.source), caso exista
+        val eventSource = try {
+            event.source
+        } catch (_: Exception) {
+            null
+        }
+        if (eventSource != null && eventSource != activeRoot) {
+            Log.d("GIGU_DEBUG", "--- [Nó Fonte: event.source] ---")
+            dumpNodeRecursive(eventSource, depth = 0, origin = "event.source")
+        }
+
+        // 3. Percorre cada janela disponível via windows (API getWindows())
+        try {
+            val windowList = windows
+            Log.d("GIGU_DEBUG", "--- Total de Janelas Interativas Detectadas (getWindows): ${windowList.size} ---")
+            windowList.forEachIndexed { index, window ->
+                val windowRoot = try {
+                    window.root
+                } catch (e: Exception) {
+                    Log.w("GIGU_DEBUG", "Erro ao ler window[$index].root: ${e.message}")
+                    null
+                }
+                val winType = window.type
+                val winLayer = window.layer
+                val isFocused = window.isFocused
+                Log.d("GIGU_DEBUG", "--- Janela #$index [tipo=$winType, layer=$winLayer, focused=$isFocused, id=${window.id}] ---")
+                if (windowRoot != null) {
+                    dumpNodeRecursive(windowRoot, depth = 0, origin = "window[$index]")
+                } else {
+                    Log.d("GIGU_DEBUG", "    (root nulo para janela #$index)")
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("GIGU_DEBUG", "Erro ao iterar getWindows(): ${e.message}")
+        }
+
+        Log.d("GIGU_DEBUG", "========== FIM DUMP ÁRVORE COMPLETA 99 (com.app99.driver) ==========")
+    }
+
+    private fun dumpNodeRecursive(node: AccessibilityNodeInfo?, depth: Int, origin: String, maxDepth: Int = 18) {
+        if (node == null || depth > maxDepth) return
+
+        val indent = "  ".repeat(depth)
+        val text = node.text?.toString()?.replace("\n", "\\n")
+        val desc = node.contentDescription?.toString()?.replace("\n", "\\n")
+        val className = node.className?.toString()
+        val viewId = node.viewIdResourceName
+
+        val infoBuilder = StringBuilder()
+        infoBuilder.append(indent)
+        infoBuilder.append("[$depth] Class: $className")
+
+        if (!viewId.isNullOrEmpty()) {
+            infoBuilder.append(" | id: $viewId")
+        }
+        if (!text.isNullOrEmpty()) {
+            infoBuilder.append(" | text: \"$text\"")
+        }
+        if (!desc.isNullOrEmpty()) {
+            infoBuilder.append(" | desc: \"$desc\"")
+        }
+        if (text.isNullOrEmpty() && desc.isNullOrEmpty() && viewId.isNullOrEmpty()) {
+            infoBuilder.append(" | (vazio/layout)")
+        }
+
+        Log.d("GIGU_DEBUG", infoBuilder.toString())
+
+        val childCount = node.childCount
+        for (i in 0 until childCount) {
+            val child = try {
+                node.getChild(i)
+            } catch (_: Exception) {
+                null
+            }
+            if (child != null) {
+                dumpNodeRecursive(child, depth + 1, origin, maxDepth)
+            }
         }
     }
 

@@ -235,7 +235,7 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("99 Motorista (com.taxis99)", color = Slate200, fontSize = 12.sp)
+                    Text("99 Motorista (com.app99.driver)", color = Slate200, fontSize = 12.sp)
                     Checkbox(
                         checked = settings.target99,
                         onCheckedChange = { onUpdateSettings(settings.copy(target99 = it)) }
