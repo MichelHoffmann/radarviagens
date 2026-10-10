@@ -489,10 +489,10 @@ class RideScannerAccessibilityService : AccessibilityService() {
                 } catch (_: Exception) {}
             }
 
-            val rootNode = try {
+            val rootNode: AccessibilityNodeInfo? = try {
                 rootInActiveWindow ?: event.source
             } catch (_: Exception) {
-                event.source
+                try { event.source } catch (_: Exception) { null }
             }
 
             if (rootNode != null) {
@@ -502,12 +502,15 @@ class RideScannerAccessibilityService : AccessibilityService() {
                 } catch (e: Exception) {
                     Log.d(TAG, "Erro ao extrair nós de rootNode: ${e.message}")
                 }
-            } else if (event.source != null) {
-                isTreeAvailable = true
-                try {
-                    extractTreeDetails(event.source, allTexts, nodeDetails, depth = 0, maxNodes = 60)
-                } catch (e: Exception) {
-                    Log.d(TAG, "Erro ao extrair nós de event.source: ${e.message}")
+            } else {
+                val sourceNode = try { event.source } catch (_: Exception) { null }
+                if (sourceNode != null) {
+                    isTreeAvailable = true
+                    try {
+                        extractTreeDetails(sourceNode, allTexts, nodeDetails, depth = 0, maxNodes = 60)
+                    } catch (e: Exception) {
+                        Log.d(TAG, "Erro ao extrair nós de event.source: ${e.message}")
+                    }
                 }
             }
 
@@ -546,12 +549,13 @@ class RideScannerAccessibilityService : AccessibilityService() {
     }
 
     private fun extractTreeDetails(
-        node: AccessibilityNodeInfo,
+        node: AccessibilityNodeInfo?,
         texts: MutableSet<String>,
         nodeDetails: MutableList<String>,
         depth: Int,
         maxNodes: Int
     ) {
+        if (node == null) return
         if (nodeDetails.size >= maxNodes || depth > 12) return
 
         val text = node.text?.toString()?.trim()
@@ -601,23 +605,27 @@ class RideScannerAccessibilityService : AccessibilityService() {
             dumpNodeRecursive(root, depth = 0, origin = "rootInActiveWindow")
         } else {
             Log.d("GIGU_DEBUG", "rootInActiveWindow é NULO")
-            event.source?.let { src ->
+            val src = try { event.source } catch (_: Exception) { null }
+            if (src != null) {
                 Log.d("GIGU_DEBUG", "--- Árvore a partir de event.source ---")
                 dumpNodeRecursive(src, depth = 0, origin = "event.source")
             }
         }
 
         try {
-            val windows = windows
-            Log.d("GIGU_DEBUG", "Total de janelas interativas (getWindows): ${windows.size}")
-            for ((wIdx, window) in windows.withIndex()) {
-                val winTitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) window.title else "N/A"
-                Log.d("GIGU_DEBUG", "Janela [$wIdx]: id=${window.id}, type=${window.type}, title=$winTitle, isFocused=${window.isFocused}, isActive=${window.isActive}")
-                val winRoot = window.root
-                if (winRoot != null) {
-                    dumpNodeRecursive(winRoot, depth = 1, origin = "window_$wIdx")
-                } else {
-                    Log.d("GIGU_DEBUG", "  Janela [$wIdx] tem root NULO")
+            val winList = windows
+            Log.d("GIGU_DEBUG", "Total de janelas interativas (getWindows): ${winList?.size ?: 0}")
+            if (winList != null) {
+                for ((wIdx, window) in winList.withIndex()) {
+                    if (window == null) continue
+                    val winTitle = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) window.title else "N/A"
+                    Log.d("GIGU_DEBUG", "Janela [$wIdx]: id=${window.id}, type=${window.type}, title=$winTitle, isFocused=${window.isFocused}, isActive=${window.isActive}")
+                    val winRoot = try { window.root } catch (_: Exception) { null }
+                    if (winRoot != null) {
+                        dumpNodeRecursive(winRoot, depth = 1, origin = "window_$wIdx")
+                    } else {
+                        Log.d("GIGU_DEBUG", "  Janela [$wIdx] tem root NULO")
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -628,11 +636,12 @@ class RideScannerAccessibilityService : AccessibilityService() {
     }
 
     private fun dumpNodeRecursive(
-        node: AccessibilityNodeInfo,
+        node: AccessibilityNodeInfo?,
         depth: Int,
         origin: String,
         maxDepth: Int = 15
     ) {
+        if (node == null) return
         if (depth > maxDepth) return
 
         val indent = "  ".repeat(depth)
