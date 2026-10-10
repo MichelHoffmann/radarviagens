@@ -76,9 +76,12 @@ fun HomeScreen(
             // Desativar sempre é permitido imediatamente
             onToggleRadar(false)
         } else {
-            // Requisito 9: A detecção agora é por OCR (ScreenCaptureService), deixando de depender da acessibilidade.
-            // Exige sobreposição de tela; a permissão de captura de tela é solicitada via MediaProjection pelo toggleRadar.
-            if (currentStatus.hasOverlayPermission) {
+            // Requisito 8: Exige apenas sobreposição e acessibilidade ativas
+            val canActivate = currentStatus.hasOverlayPermission &&
+                    currentStatus.isAccessibilityEnabledInSystem &&
+                    currentStatus.isServiceConnected
+
+            if (canActivate) {
                 onToggleRadar(true)
             } else {
                 showDialog = true
@@ -468,7 +471,7 @@ fun HomeScreen(
                             .padding(10.dp)
                     ) {
                         Text(
-                            text = "A sobreposição é necessária para exibir o pop-up com R$/km e R$/hora sobre o app da 99. A detecção é feita em tempo real por captura de tela + OCR.",
+                            text = "A sobreposição e o serviço de acessibilidade são necessários para capturar frames da tela via takeScreenshot() e exibir o pop-up com R$/km e R$/hora sobre o app da 99.",
                             fontSize = 11.sp,
                             color = Slate400
                         )
@@ -479,7 +482,7 @@ fun HomeScreen(
                 TextButton(
                     onClick = {
                         diagStatus = DiagnosticHelper.checkStatus(context)
-                        if (diagStatus.hasOverlayPermission) {
+                        if (diagStatus.hasOverlayPermission && diagStatus.isAccessibilityEnabledInSystem && diagStatus.isServiceConnected) {
                             showDialog = false
                             onToggleRadar(true)
                         } else {
@@ -487,7 +490,7 @@ fun HomeScreen(
                         }
                     }
                 ) {
-                    Text("OK, Ativar", color = Emerald400, fontWeight = FontWeight.Bold)
+                    Text("OK, Entendi", color = Emerald400, fontWeight = FontWeight.Bold)
                 }
             }
         )

@@ -8,49 +8,6 @@ export interface AndroidCodeFile {
 
 export const ANDROID_PROJECT_FILES: AndroidCodeFile[] = [
   {
-    filename: 'ScreenCaptureService.kt',
-    language: 'kotlin',
-    path: 'app/src/main/java/com/radardecorridas/app/service/ScreenCaptureService.kt',
-    description: 'Foreground service que utiliza MediaProjection, ImageReader e ML Kit Text Recognition offline para capturar e analisar ofertas na tela a cada 700ms.',
-    content: `package com.radardecorridas.app.service
-
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
-import android.content.Context
-import android.content.Intent
-import android.content.pm.ServiceInfo
-import android.graphics.Bitmap
-import android.graphics.Color
-import android.graphics.PixelFormat
-import android.hardware.display.DisplayManager
-import android.hardware.display.VirtualDisplay
-import android.media.ImageReader
-import android.media.projection.MediaProjection
-import android.media.projection.MediaProjectionManager
-import android.os.Build
-import android.os.Handler
-import android.os.IBinder
-import android.os.Looper
-import android.util.Log
-import androidx.core.app.NotificationCompat
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-import com.radardecorridas.app.R
-import com.radardecorridas.app.model.DriverSettings
-import com.radardecorridas.app.util.OcrParser
-import com.radardecorridas.app.util.RideCalculator
-import kotlinx.coroutines.*
-import java.util.Locale
-import java.util.concurrent.atomic.AtomicBoolean
-
-class ScreenCaptureService : Service() {
-    // MediaProjection + ML Kit OCR offline (700ms loop, 50% scale, deduplication fingerprint)
-}
-`,
-  },
-  {
     filename: 'RideScannerAccessibilityService.kt',
     language: 'kotlin',
     path: 'app/src/main/java/com/radardecorridas/service/RideScannerAccessibilityService.kt',
