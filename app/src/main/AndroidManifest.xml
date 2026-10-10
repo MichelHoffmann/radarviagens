@@ -6,7 +6,14 @@
     <!-- Permissão para manter serviço em execução em segundo plano -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <queries>
+        <package android:name="com.app99.driver" />
+        <package android:name="com.didiglobal.driver" />
+        <package android:name="com.ubercab.driver" />
+    </queries>
 
     <application
         android:allowBackup="true"
@@ -40,6 +47,12 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/accessibility_service_config" />
         </service>
+
+        <!-- Serviço de Captura de Tela em Tempo Real via MediaProjection + OCR -->
+        <service
+            android:name=".service.ScreenCaptureService"
+            android:foregroundServiceType="mediaProjection"
+            android:exported="false" />
 
         <!-- Serviço do Pop-up Flutuante com WindowManager -->
         <service

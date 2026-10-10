@@ -76,15 +76,11 @@ fun HomeScreen(
             // Desativar sempre é permitido imediatamente
             onToggleRadar(false)
         } else {
-            // Se ativando: verifica se todos os pré-requisitos essenciais estão cumpridos
-            val canActivate = currentStatus.hasOverlayPermission &&
-                    currentStatus.isAccessibilityEnabledInSystem &&
-                    currentStatus.isServiceConnected
-
-            if (canActivate) {
+            // Requisito 9: A detecção agora é por OCR (ScreenCaptureService), deixando de depender da acessibilidade.
+            // Exige sobreposição de tela; a permissão de captura de tela é solicitada via MediaProjection pelo toggleRadar.
+            if (currentStatus.hasOverlayPermission) {
                 onToggleRadar(true)
             } else {
-                // Abre o diálogo explicativo com diagnóstico e ações corretivas
                 showDialog = true
             }
         }
@@ -463,7 +459,7 @@ fun HomeScreen(
                         }
                     }
 
-                    // Explicação de segurança
+                    // Explicação de operação
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -472,7 +468,7 @@ fun HomeScreen(
                             .padding(10.dp)
                     ) {
                         Text(
-                            text = "Sem essas permissões o Radar não consegue observar as ofertas na tela da 99 nem exibir o pop-up informativo.",
+                            text = "A sobreposição é necessária para exibir o pop-up com R$/km e R$/hora sobre o app da 99. A detecção é feita em tempo real por captura de tela + OCR.",
                             fontSize = 11.sp,
                             color = Slate400
                         )
@@ -483,7 +479,7 @@ fun HomeScreen(
                 TextButton(
                     onClick = {
                         diagStatus = DiagnosticHelper.checkStatus(context)
-                        if (diagStatus.hasOverlayPermission && diagStatus.isAccessibilityEnabledInSystem && diagStatus.isServiceConnected) {
+                        if (diagStatus.hasOverlayPermission) {
                             showDialog = false
                             onToggleRadar(true)
                         } else {
@@ -491,7 +487,7 @@ fun HomeScreen(
                         }
                     }
                 ) {
-                    Text("OK, Entendi", color = Emerald400, fontWeight = FontWeight.Bold)
+                    Text("OK, Ativar", color = Emerald400, fontWeight = FontWeight.Bold)
                 }
             }
         )

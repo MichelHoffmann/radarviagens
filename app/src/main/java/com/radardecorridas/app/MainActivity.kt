@@ -1,8 +1,10 @@
 package com.radardecorridas.app
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -10,6 +12,7 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -27,6 +30,7 @@ import com.radardecorridas.app.model.DriverSettings
 import com.radardecorridas.app.model.RideData
 import com.radardecorridas.app.model.ScanHistoryItem
 import com.radardecorridas.app.service.FloatingOverlayService
+import com.radardecorridas.app.service.ScreenCaptureService
 import com.radardecorridas.app.ui.screens.*
 import com.radardecorridas.app.ui.theme.*
 import com.radardecorridas.app.util.DiagnosticHelper
@@ -43,12 +47,42 @@ class MainActivity : ComponentActivity() {
     private lateinit var prefs: SharedPreferences
     private var settingsState by mutableStateOf(DriverSettings(isEnabled = false))
 
+    // Requisito 1: Lança o diálogo do sistema para autorização de captura de tela via MediaProjection
+    private val captureLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            val serviceIntent = Intent(this, ScreenCaptureService::class.java).apply {
+                action = ScreenCaptureService.ACTION_START
+                putExtra(ScreenCaptureService.EXTRA_RESULT_CODE, result.resultCode)
+                putExtra(ScreenCaptureService.EXTRA_RESULT_DATA, result.data)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent)
+            } else {
+                startService(serviceIntent)
+            }
+
+            val overlayIntent = Intent(this, FloatingOverlayService::class.java).apply {
+                action = FloatingOverlayService.ACTION_START_RADAR
+            }
+            startService(overlayIntent)
+
+            prefs.edit().putBoolean("is_enabled", true).apply()
+            settingsState = settingsState.copy(isEnabled = true)
+            Toast.makeText(this, "Radar ATIVADO com Captura de Tela e OCR.", Toast.LENGTH_SHORT).show()
+        } else {
+            prefs.edit().putBoolean("is_enabled", false).apply()
+            settingsState = settingsState.copy(isEnabled = false)
+            Toast.makeText(this, "Permissão de captura de tela necessária para detecção por OCR.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = getSharedPreferences("RadarPrefs", Context.MODE_PRIVATE)
 
-        // Por padrão no primeiro uso ou ao abrir o app, o Radar deve estar DESATIVADO
-        val isEnabled = prefs.getBoolean("is_enabled", false)
+        val isEnabled = prefs.getBoolean("is_enabled", false) && ScreenCaptureService.isServiceRunning
 
         settingsState = DriverSettings(
             isEnabled = isEnabled,
@@ -57,14 +91,6 @@ class MainActivity : ComponentActivity() {
             fuelPricePerLiter = prefs.getFloat("fuel_price", 5.85f).toDouble(),
             vehicleConsumptionKmPerLiter = prefs.getFloat("vehicle_consumption", 11.5f).toDouble()
         )
-
-        // Se o Radar estiver ativado nas preferências, confirma o serviço ativo
-        if (isEnabled && hasOverlayPermission()) {
-            val serviceIntent = Intent(this, FloatingOverlayService::class.java).apply {
-                action = FloatingOverlayService.ACTION_START_RADAR
-            }
-            startService(serviceIntent)
-        }
 
         setContent {
             RadarDeCorridasTheme {
@@ -200,43 +226,33 @@ class MainActivity : ComponentActivity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
                 Toast.makeText(
                     this,
-                    "Conceda a permissão de sobreposição para exibir o botão flutuante.",
+                    "Conceda a permissão de sobreposição para exibir o pop-up.",
                     Toast.LENGTH_LONG
                 ).show()
                 DiagnosticHelper.openOverlaySettings(this)
                 return
             }
 
-            // Exige também que o serviço de acessibilidade esteja ativo
-            if (!DiagnosticHelper.isAccessibilityServiceEnabled(this)) {
-                Toast.makeText(
-                    this,
-                    "Ative o serviço de acessibilidade do Radar de Corridas.",
-                    Toast.LENGTH_LONG
-                ).show()
-                DiagnosticHelper.openAccessibilitySettings(this)
-                return
-            }
-
-            prefs.edit().putBoolean("is_enabled", true).apply()
-            settingsState = settingsState.copy(isEnabled = true)
-
-            val serviceIntent = Intent(this, FloatingOverlayService::class.java).apply {
-                action = FloatingOverlayService.ACTION_START_RADAR
-            }
-            startService(serviceIntent)
-            Toast.makeText(this, "Radar ATIVADO. Botão flutuante exibido na tela.", Toast.LENGTH_SHORT).show()
+            // Requisito 1: Pedir a permissão de captura via MediaProjectionManager na hora de ligar o app
+            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+            captureLauncher.launch(projectionManager.createScreenCaptureIntent())
         } else {
-            // Desativando: encerra detecção e remove completamente botão flutuante e overlays
+            // Desativando: encerra detecção OCR e remove botão flutuante e overlays
             prefs.edit().putBoolean("is_enabled", false).apply()
             settingsState = settingsState.copy(isEnabled = false)
+
+            val captureIntent = Intent(this, ScreenCaptureService::class.java).apply {
+                action = ScreenCaptureService.ACTION_STOP
+            }
+            startService(captureIntent)
+            stopService(captureIntent)
 
             val serviceIntent = Intent(this, FloatingOverlayService::class.java).apply {
                 action = FloatingOverlayService.ACTION_STOP_RADAR
             }
             startService(serviceIntent)
             stopService(serviceIntent)
-            Toast.makeText(this, "Radar DESATIVADO. Botão flutuante removido.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Radar DESATIVADO.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -261,15 +277,12 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         val isEnabled = prefs.getBoolean("is_enabled", false)
         if (isEnabled && !hasOverlayPermission()) {
-            // Se a permissão foi revogada pelo sistema
             prefs.edit().putBoolean("is_enabled", false).apply()
             settingsState = settingsState.copy(isEnabled = false)
-        } else if (isEnabled && hasOverlayPermission()) {
-            settingsState = settingsState.copy(isEnabled = true)
-            val serviceIntent = Intent(this, FloatingOverlayService::class.java).apply {
-                action = FloatingOverlayService.ACTION_START_RADAR
-            }
-            startService(serviceIntent)
+        } else if (isEnabled && !ScreenCaptureService.isServiceRunning) {
+            // Se o serviço foi interrompido ou reiniciado, atualiza estado para sincronizar UI
+            prefs.edit().putBoolean("is_enabled", false).apply()
+            settingsState = settingsState.copy(isEnabled = false)
         }
     }
 }

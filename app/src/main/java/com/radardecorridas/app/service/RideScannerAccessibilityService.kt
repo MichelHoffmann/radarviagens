@@ -271,65 +271,11 @@ class RideScannerAccessibilityService : AccessibilityService() {
             )
             addLog(logEntry)
 
-            // 5. Detecção de corrida na 99 e exibição do pop-up de sobreposição
+            // 5. Diagnóstico de eventos da 99 mantido (A detecção e pop-up agora são executados pelo ScreenCaptureService via OCR)
             if (is99 && fullText.isNotBlank()) {
-                val isRadarEnabled = try {
-                    if (!::prefs.isInitialized) {
-                        prefs = getSharedPreferences("RadarPrefs", Context.MODE_PRIVATE)
-                    }
-                    prefs.getBoolean("is_enabled", false)
-                } catch (_: Exception) {
-                    false
-                }
-
-                if (isRadarEnabled) {
-                    val parsedRide = OcrParser.parseRideText(fullText)
-                    if (parsedRide != null && parsedRide.price > 0) {
-                        val now = System.currentTimeMillis()
-                        // Evita acionar repetidas vezes para o mesmo pop-up dentro de 5 segundos
-                        val offerFingerprint = "${parsedRide.price}_${parsedRide.totalDistanceKm}_${parsedRide.totalDurationMin}"
-                        if (offerFingerprint != lastDetectedOfferFingerprint || (now - lastDetectedOfferTimestamp > 5000)) {
-                            lastDetectedOfferFingerprint = offerFingerprint
-                            lastDetectedOfferTimestamp = now
-                            detectedPopupsCount++
-
-                            // Carrega configurações de metas do motorista
-                            val minKm = prefs.getFloat("min_price_per_km", 2.0f).toDouble()
-                            val minHour = prefs.getFloat("min_price_per_hour", 35.0f).toDouble()
-                            val fuelPrice = prefs.getFloat("fuel_price", 5.85f).toDouble()
-                            val consumption = prefs.getFloat("vehicle_consumption", 11.5f).toDouble()
-
-                            val driverSettings = DriverSettings(
-                                isEnabled = true,
-                                minPricePerKm = minKm,
-                                minPricePerHour = minHour,
-                                fuelPricePerLiter = fuelPrice,
-                                vehicleConsumptionKmPerLiter = consumption
-                            )
-
-                            // Calcula R$/km, R$/h e classificação de rentabilidade
-                            val evaluation = RideCalculator.evaluateRide(parsedRide, driverSettings)
-
-                            // Envia intenção para o FloatingOverlayService exibir o pop-up no topo da tela
-                            val popupIntent = Intent(this, FloatingOverlayService::class.java).apply {
-                                action = FloatingOverlayService.ACTION_SHOW_POPUP
-                                putExtra("APP_NAME", "99")
-                                putExtra("PRICE", parsedRide.price)
-                                putExtra("TOTAL_KM", parsedRide.totalDistanceKm)
-                                putExtra("TOTAL_MIN", parsedRide.totalDurationMin)
-                                putExtra("PRICE_PER_KM", evaluation.pricePerKm)
-                                putExtra("PRICE_PER_HOUR", evaluation.pricePerHour)
-                                putExtra("VERDICT", evaluation.verdict.name)
-                            }
-
-                            try {
-                                startService(popupIntent)
-                                Log.i(TAG, "Pop-up do Radar acionado para corrida da 99: R$/km=${evaluation.pricePerKm}, R$/h=${evaluation.pricePerHour}, veredito=${evaluation.verdict}")
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Erro ao iniciar serviço de pop-up flutuante", e)
-                            }
-                        }
-                    }
+                val parsedRide = OcrParser.parseRideText(fullText)
+                if (parsedRide != null && parsedRide.price > 0) {
+                    Log.d(TAG, "Acessibilidade detectou texto compatível com corrida: R$ ${parsedRide.price} (processamento delegado ao ScreenCaptureService OCR)")
                 }
             }
 
